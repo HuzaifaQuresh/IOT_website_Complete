@@ -1,7 +1,8 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { Readable } from "node:stream";
+import zlib from "node:zlib";
+import { Readable, pipeline } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,20 @@ const MIME_TYPES = {
   ".webm": "video/webm",
 };
 
+const COMPRESSIBLE_EXTS = new Set([".html", ".css", ".js", ".json", ".svg", ".ttf", ".otf"]);
+
+function createCompressor(req, res, mimeType) {
+  const acceptEncoding = req.headers["accept-encoding"] || "";
+  if (acceptEncoding.includes("br")) {
+    res.setHeader("Content-Encoding", "br");
+    return zlib.createBrotliCompress();
+  } else if (acceptEncoding.includes("gzip")) {
+    res.setHeader("Content-Encoding", "gzip");
+    return zlib.createGzip();
+  }
+  return null;
+}
+
 http
   .createServer(async (req, res) => {
     // 1. Try to serve from dist/client/
@@ -48,10 +63,20 @@ http
       const stats = fs.statSync(filePath);
       if (stats.isFile()) {
         const ext = path.extname(filePath).toLowerCase();
-        res.writeHead(200, {
-          "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-          "Cache-Control": "public, max-age=31536000, immutable",
-        });
+        const mimeType = MIME_TYPES[ext] || "application/octet-stream";
+        res.setHeader("Content-Type", mimeType);
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+        if (COMPRESSIBLE_EXTS.has(ext)) {
+          const compressor = createCompressor(req, res, mimeType);
+          if (compressor) {
+            res.statusCode = 200;
+            pipeline(fs.createReadStream(filePath), compressor, res, () => {});
+            return;
+          }
+        }
+
+        res.statusCode = 200;
         fs.createReadStream(filePath).pipe(res);
         return;
       }
@@ -95,8 +120,26 @@ http
       // Copy status and headers
       res.statusCode = webRes.status;
       webRes.headers.forEach((value, key) => {
-        res.setHeader(key, value);
+        if (key.toLowerCase() !== "content-encoding" && key.toLowerCase() !== "content-length") {
+          res.setHeader(key, value);
+        }
       });
+
+      const contentType = webRes.headers.get("content-type") || "";
+      const isCompressibleSsr =
+        contentType.includes("text/html") ||
+        contentType.includes("application/json") ||
+        contentType.includes("text/css") ||
+        contentType.includes("javascript");
+
+      if (isCompressibleSsr) {
+        const compressor = createCompressor(req, res, contentType);
+        if (compressor && webRes.body) {
+          const nodeStream = Readable.fromWeb(webRes.body);
+          pipeline(nodeStream, compressor, res, () => {});
+          return;
+        }
+      }
 
       if (webRes.body) {
         const reader = webRes.body.getReader();

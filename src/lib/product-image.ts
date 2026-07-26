@@ -3,10 +3,10 @@
 export type ProductImageSize = "thumb" | "card" | "detail" | "hero";
 
 const SIZE: Record<ProductImageSize, { w: number; q: number }> = {
-  thumb: { w: 96, q: 72 },
-  card: { w: 420, q: 78 },
-  detail: { w: 800, q: 82 },
-  hero: { w: 1200, q: 85 },
+  thumb: { w: 96, q: 68 },
+  card: { w: 360, q: 70 },
+  detail: { w: 720, q: 75 },
+  hero: { w: 1000, q: 75 },
 };
 
 export const PRODUCT_IMAGE_PLACEHOLDER = "/placeholder-product.svg";
@@ -23,7 +23,7 @@ export function optimizeProductImageUrl(
 
   if (url.includes("images.unsplash.com")) {
     const base = url.split("?")[0];
-    return `${base}?w=${w}&q=${q}&auto=format&fit=crop`;
+    return `${base}?w=${w}&q=${q}&auto=format&fm=webp&fit=crop`;
   }
 
   if (url.includes("supabase.co/storage/v1/object/public")) {

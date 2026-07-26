@@ -153,7 +153,7 @@ const BANNERS = [
     desc: "Complete ESP32 kits, Arduino boards, and high-frequency RF modules with code samples.",
     bg: "from-sky-600 via-blue-500 to-primary text-white",
     bgImage:
-      "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?auto=format&fit=crop&w=1000&q=75&fm=webp",
     badge: "Fast Dispatch",
     link: "/products?category=Development Boards",
   },
@@ -167,6 +167,45 @@ const BANNERS = [
     link: "/iot-solutions",
   },
 ];
+
+function FlashSaleTimer() {
+  const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 48, seconds: 35 });
+
+  useEffect(() => {
+    const countdownTimer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev.seconds > 0) {
+          return { ...prev, seconds: prev.seconds - 1 };
+        } else if (prev.minutes > 0) {
+          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+        } else if (prev.hours > 0) {
+          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        } else {
+          return { hours: 3, minutes: 0, seconds: 0 };
+        }
+      });
+    }, 1000);
+    return () => clearInterval(countdownTimer);
+  }, []);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return (
+    <div className="flex items-center gap-1 text-xs font-mono">
+      <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
+        {pad(timeLeft.hours)}
+      </span>
+      <span className="font-bold text-white">:</span>
+      <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
+        {pad(timeLeft.minutes)}
+      </span>
+      <span className="font-bold text-white">:</span>
+      <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
+        {pad(timeLeft.seconds)}
+      </span>
+    </div>
+  );
+}
 
 const CHANNELS = [
   {
@@ -216,7 +255,6 @@ function Index() {
   });
 
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 48, seconds: 35 });
 
   useEffect(() => {
     const slideTimer = setInterval(() => {
@@ -224,25 +262,6 @@ function Index() {
     }, 5000);
     return () => clearInterval(slideTimer);
   }, []);
-
-  useEffect(() => {
-    const countdownTimer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        } else {
-          return { hours: 3, minutes: 0, seconds: 0 }; // reset
-        }
-      });
-    }, 1000);
-    return () => clearInterval(countdownTimer);
-  }, []);
-
-  const pad = (n: number) => String(n).padStart(2, "0");
 
   const list = products || MOCK_PRODUCTS;
 
@@ -458,19 +477,7 @@ function Index() {
                 <span className="text-xs font-bold text-sky-50 hidden sm:inline">
                   ON SALE NOW | ENDING IN:
                 </span>
-                <div className="flex items-center gap-1 text-xs font-mono">
-                  <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
-                    {pad(timeLeft.hours)}
-                  </span>
-                  <span className="font-bold text-white">:</span>
-                  <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
-                    {pad(timeLeft.minutes)}
-                  </span>
-                  <span className="font-bold text-white">:</span>
-                  <span className="bg-slate-950 text-white font-bold px-2 py-1 rounded min-w-8 text-center">
-                    {pad(timeLeft.seconds)}
-                  </span>
-                </div>
+                <FlashSaleTimer />
               </div>
             </div>
             <Button
@@ -486,10 +493,10 @@ function Index() {
           {/* Flash Sale Grid */}
           <div className="p-4 bg-slate-50/50">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {flashSaleProducts.map((p) => {
+              {flashSaleProducts.map((p, idx) => {
                 return (
                   <div key={p.id} className="relative group">
-                    <ProductCard p={p} />
+                    <ProductCard p={p} priority={idx < 4} />
                   </div>
                 );
               })}

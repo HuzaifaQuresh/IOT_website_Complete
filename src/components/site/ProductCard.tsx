@@ -1,3 +1,4 @@
+import React from "react";
 import { Link } from "@tanstack/react-router";
 import { ShoppingCart, Star } from "lucide-react";
 import { fmtPKR } from "@/lib/format";
@@ -20,7 +21,15 @@ export type Product = {
   stock: number;
 };
 
-export function ProductCard({ p, view = "grid" }: { p: Product; view?: "grid" | "list" }) {
+export const ProductCard = React.memo(function ProductCard({
+  p,
+  view = "grid",
+  priority = false,
+}: {
+  p: Product;
+  view?: "grid" | "list";
+  priority?: boolean;
+}) {
   const { add } = useCart();
   const original = p.discount_pct > 0 ? p.price_pkr / (1 - p.discount_pct / 100) : null;
   const inStock = p.availability === "in_stock" && p.stock > 0;
@@ -53,8 +62,11 @@ export function ProductCard({ p, view = "grid" }: { p: Product; view?: "grid" | 
           <img
             src={optimizeProductImageUrl(p.image_url, "card")}
             alt={p.title}
-            loading="lazy"
+            width="144"
+            height="144"
+            loading={priority ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={priority ? "high" : "low"}
             className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
           />
           {p.discount_pct > 0 && (
@@ -107,6 +119,7 @@ export function ProductCard({ p, view = "grid" }: { p: Product; view?: "grid" | 
               onClick={onAdd}
               disabled={!inStock}
               className="bg-primary hover:bg-primary/90 text-white font-bold h-9 px-4 shadow-sm"
+              aria-label={`Add ${p.title} to cart`}
             >
               <ShoppingCart className="h-4 w-4 mr-1.5" /> Add to Cart
             </Button>
@@ -126,8 +139,11 @@ export function ProductCard({ p, view = "grid" }: { p: Product; view?: "grid" | 
         <img
           src={optimizeProductImageUrl(p.image_url, "card")}
           alt={p.title}
-          loading="lazy"
+          width="360"
+          height="270"
+          loading={priority ? "eager" : "lazy"}
           decoding="async"
+          fetchPriority={priority ? "high" : "low"}
           className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition duration-500"
         />
         {p.discount_pct > 0 && (
@@ -176,10 +192,11 @@ export function ProductCard({ p, view = "grid" }: { p: Product; view?: "grid" | 
           className="mt-3 w-full bg-primary hover:bg-primary/90 text-white font-bold h-8 text-xs sm:text-sm transition shadow-sm"
           onClick={onAdd}
           disabled={!inStock}
+          aria-label={`Add ${p.title} to cart`}
         >
           <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Add
         </Button>
       </div>
     </article>
   );
-}
+});

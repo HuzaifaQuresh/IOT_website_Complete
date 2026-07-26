@@ -81,6 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#0284c7" },
       { title: "NexusIoT — IoT Automation, Smart Home & Tuya Sensors in Pakistan" },
       {
         name: "description",
@@ -111,6 +112,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: "/og-image.svg" },
     ],
     links: [
+      { rel: "preconnect", href: "https://images.unsplash.com" },
+      { rel: "dns-prefetch", href: "https://images.unsplash.com" },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "apple-touch-icon", href: "/favicon.svg" },
       {
@@ -146,8 +149,7 @@ function RootComponent() {
 
   useEffect(() => {
     initializeMockProductsOnClient();
-    queryClient.invalidateQueries();
-  }, [queryClient]);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

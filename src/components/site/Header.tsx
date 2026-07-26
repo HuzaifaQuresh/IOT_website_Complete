@@ -230,6 +230,7 @@ export function Header() {
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Search cameras, sensors, smart home, development boards..."
+                  aria-label="Search products, cameras, sensors and dev boards"
                   className="h-10 w-full bg-slate-50 text-slate-900 pl-10 pr-4 rounded-l-md rounded-r-none border border-slate-200 focus-visible:ring-primary focus-visible:border-primary focus-visible:bg-white transition-colors text-xs sm:text-sm"
                 />
               </div>
@@ -362,6 +363,7 @@ export function Header() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search products…"
+              aria-label="Search products"
               className="h-10 bg-slate-50 text-slate-900 pl-9 border border-slate-200 w-full"
             />
           </div>
@@ -370,8 +372,8 @@ export function Header() {
 
       <CategoryNavBar />
 
-      <ContactUsDialog open={contactOpen} onOpenChange={setContactOpen} />
-      <TrackOrderDialog open={trackOpen} onOpenChange={setTrackOpen} />
+      {contactOpen && <ContactUsDialog open={contactOpen} onOpenChange={setContactOpen} />}
+      {trackOpen && <TrackOrderDialog open={trackOpen} onOpenChange={setTrackOpen} />}
     </header>
   );
 }
