@@ -25,10 +25,11 @@ export function ProductGallery({ title, images }: Props) {
 
   const [active, setActive] = useState(0);
   const thumbStripRef = useRef<HTMLDivElement>(null);
+  const galleryKey = gallery.join("|");
 
   useEffect(() => {
     setActive(0);
-  }, [gallery.join("|")]);
+  }, [galleryKey]);
 
   useEffect(() => {
     const strip = thumbStripRef.current;

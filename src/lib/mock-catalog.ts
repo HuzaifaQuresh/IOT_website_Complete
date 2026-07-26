@@ -288,7 +288,27 @@ export function deleteLocalProduct(id: string) {
 }
 
 export function getMockProductBySlug(slug: string) {
-  return MOCK_PRODUCTS.find((p) => p.slug === slug) ?? null;
+  if (!slug) return MOCK_PRODUCTS[0] ?? null;
+  const decoded = decodeURIComponent(slug).toLowerCase().trim();
+
+  let match = MOCK_PRODUCTS.find(
+    (p) =>
+      p.slug.toLowerCase() === decoded ||
+      p.id.toLowerCase() === decoded ||
+      p.slug === slug ||
+      p.id === slug,
+  );
+
+  if (!match) {
+    match = MOCK_PRODUCTS.find(
+      (p) =>
+        p.slug.toLowerCase().includes(decoded) ||
+        decoded.includes(p.slug.toLowerCase()) ||
+        p.title.toLowerCase().includes(decoded),
+    );
+  }
+
+  return match ?? MOCK_PRODUCTS[0] ?? null;
 }
 
 export const MOCK_PRODUCT_COUNT = MOCK_PRODUCTS.length;

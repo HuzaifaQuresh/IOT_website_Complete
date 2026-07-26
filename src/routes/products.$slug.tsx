@@ -1,6 +1,7 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { fetchActiveVouchers } from "@/api/vouchers";
+import { fetchProductBySlug } from "@/api/products";
 import { useProduct } from "@/hooks/useProduct";
 import { Button } from "@/components/ui/button";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -12,6 +13,11 @@ import { PageContainer, Breadcrumbs } from "@/components/site/PageLayout";
 import { buildProductGalleryImages } from "@/lib/product-image";
 
 export const Route = createFileRoute("/products/$slug")({
+  loader: ({ context: { queryClient }, params: { slug } }) =>
+    queryClient.ensureQueryData({
+      queryKey: ["product", slug],
+      queryFn: () => fetchProductBySlug(slug),
+    }),
   component: ProductDetailPage,
   notFoundComponent: () => (
     <PageContainer size="md" className="py-20 text-center">
@@ -42,7 +48,17 @@ function ProductDetailPage() {
   }
 
   if (!product.isLoading && !product.data) {
-    throw notFound();
+    return (
+      <PageContainer size="md" className="py-20 text-center">
+        <h1 className="text-2xl font-bold text-slate-900">Product not found</h1>
+        <p className="text-slate-500 text-sm mt-2">
+          The requested product could not be found or may have been updated.
+        </p>
+        <Button asChild className="mt-6 font-bold">
+          <Link to="/products">Explore All Products</Link>
+        </Button>
+      </PageContainer>
+    );
   }
 
   const data = product.data!;

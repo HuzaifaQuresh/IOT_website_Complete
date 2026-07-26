@@ -9,16 +9,20 @@ export function useProduct(slug: string) {
     enabled: !!slug,
   });
 
+  const productId = product.data?.id;
+  const category = product.data?.category;
+
   const reviews = useQuery({
-    queryKey: ["reviews", product.data?.id],
-    queryFn: () => fetchProductReviews(product.data!.id),
-    enabled: !!product.data?.id,
+    queryKey: ["reviews", productId],
+    queryFn: () => (productId ? fetchProductReviews(productId) : Promise.resolve([])),
+    enabled: !!productId,
   });
 
   const related = useQuery({
-    queryKey: ["related", product.data?.category, product.data?.id],
-    queryFn: () => fetchRelatedProducts(product.data!.category, product.data!.id),
-    enabled: !!product.data?.category && !!product.data?.id,
+    queryKey: ["related", category, productId],
+    queryFn: () =>
+      category && productId ? fetchRelatedProducts(category, productId) : Promise.resolve([]),
+    enabled: !!category && !!productId,
   });
 
   return { product, reviews, related };

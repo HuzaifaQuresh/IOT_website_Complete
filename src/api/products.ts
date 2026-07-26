@@ -61,15 +61,22 @@ export async function fetchProducts(opts?: { category?: string; limit?: number }
 }
 
 export async function fetchProductBySlug(slug: string) {
+  if (!slug) return getMockProductBySlug("");
   if (!isSupabaseConfigured()) {
     return getMockProductBySlug(slug);
   }
   try {
     const { data, error } = await withTimeout(
       supabase.from("products").select("*").eq("slug", slug).maybeSingle(),
+      800,
     );
-    if (error) throw error;
-    if (data) return data as ProductRow;
+    if (!error && data) return data as ProductRow;
+
+    const { data: dataById, error: errById } = await withTimeout(
+      supabase.from("products").select("*").eq("id", slug).maybeSingle(),
+      800,
+    );
+    if (!errById && dataById) return dataById as ProductRow;
   } catch {
     /* fallback to demo catalog */
   }

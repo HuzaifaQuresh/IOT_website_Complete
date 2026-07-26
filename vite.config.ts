@@ -19,7 +19,6 @@ export default defineConfig(async ({ mode, command }) => {
     tsconfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
       server: { entry: "server" },
-      autoCodeSplitting: true,
       importProtection: {
         behavior: "error",
         client: { files: ["**/server/**"], specifiers: ["server-only"] },
@@ -47,19 +46,6 @@ export default defineConfig(async ({ mode, command }) => {
       target: "esnext",
       minify: "esbuild",
       cssMinify: true,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes("node_modules")) {
-              if (id.includes("lucide-react")) return "vendor-lucide";
-              if (id.includes("recharts") || id.includes("d3")) return "vendor-charts";
-              if (id.includes("@supabase")) return "vendor-supabase";
-              if (id.includes("@tanstack")) return "vendor-tanstack";
-              if (id.includes("framer-motion") || id.includes("motion")) return "vendor-motion";
-            }
-          },
-        },
-      },
     },
     server: {
       host: "0.0.0.0",

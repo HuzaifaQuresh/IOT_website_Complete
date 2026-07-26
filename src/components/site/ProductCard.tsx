@@ -34,6 +34,7 @@ export const ProductCard = React.memo(function ProductCard({
   const original = p.discount_pct > 0 ? p.price_pkr / (1 - p.discount_pct / 100) : null;
   const inStock = p.availability === "in_stock" && p.stock > 0;
   const detailTo = "/products/$slug" as const;
+  const productSlug = p.slug || p.id;
 
   const onAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,7 +43,13 @@ export const ProductCard = React.memo(function ProductCard({
       toast.error("Item not available");
       return;
     }
-    add({ id: p.id, title: p.title, price_pkr: p.price_pkr, image_url: p.image_url, slug: p.slug });
+    add({
+      id: p.id,
+      title: p.title,
+      price_pkr: p.price_pkr,
+      image_url: p.image_url,
+      slug: productSlug,
+    });
     toast.success("Added to cart");
   };
 
@@ -56,7 +63,7 @@ export const ProductCard = React.memo(function ProductCard({
       <div className="flex gap-4 p-4 rounded-lg border border-slate-200 bg-white hover:shadow-md transition group relative">
         <Link
           to={detailTo}
-          params={{ slug: p.slug }}
+          params={{ slug: productSlug }}
           className="relative h-28 w-28 sm:h-36 sm:w-36 shrink-0 rounded-md bg-slate-50 border border-slate-100 overflow-hidden block"
         >
           <img
@@ -77,7 +84,7 @@ export const ProductCard = React.memo(function ProductCard({
         </Link>
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div>
-            <Link to={detailTo} params={{ slug: p.slug }} className="block">
+            <Link to={detailTo} params={{ slug: productSlug }} className="block">
               <div className="text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
                 {p.manufacturer || "Nexus"} • {p.category}
               </div>
@@ -133,7 +140,7 @@ export const ProductCard = React.memo(function ProductCard({
     <article className="group flex flex-col rounded-lg border border-slate-200/70 bg-white overflow-hidden hover:shadow-md hover:border-primary/20 transition-all duration-300 relative">
       <Link
         to={detailTo}
-        params={{ slug: p.slug }}
+        params={{ slug: productSlug }}
         className="block relative aspect-[4/3] bg-slate-50 border-b border-slate-100 overflow-hidden"
       >
         <img
@@ -158,7 +165,7 @@ export const ProductCard = React.memo(function ProductCard({
         )}
       </Link>
       <div className="p-3 flex flex-col flex-1 justify-between bg-white">
-        <Link to={detailTo} params={{ slug: p.slug }} className="block">
+        <Link to={detailTo} params={{ slug: productSlug }} className="block">
           <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
             {p.manufacturer || "NexusIoT"}
           </div>
