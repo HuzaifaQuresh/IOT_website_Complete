@@ -6,4 +6,5 @@ export {
   saveLocalProduct,
   deleteLocalProduct,
   initializeMockProductsOnClient,
+  syncServerProducts,
 } from "@/lib/mock-catalog";

@@ -40,14 +40,27 @@ const productSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
-  price_pkr: z.coerce.number().min(1, "Price must be greater than 0"),
-  stock: z.coerce.number().min(0, "Stock cannot be negative"),
+  price_pkr: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
+    z
+      .number({ invalid_type_error: "Price must be a valid number" })
+      .min(1, "Price must be greater than 0"),
+  ),
+  stock: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 50 : Number(val)),
+    z
+      .number({ invalid_type_error: "Stock must be a valid number" })
+      .min(0, "Stock cannot be negative"),
+  ),
   image_url: z.string().optional().or(z.literal("")),
   gallery_urls: z.array(z.string()).optional(),
   manufacturer: z.string().optional(),
   color: z.string().optional(),
   availability: z.enum(["in_stock", "on_demand", "coming_soon", "obsolete"]),
-  discount_pct: z.coerce.number().min(0).max(100).optional(),
+  discount_pct: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0).max(100).optional(),
+  ),
 });
 
 type ProductValues = z.infer<typeof productSchema>;
@@ -82,15 +95,15 @@ export function ProductEditor({
     defaultValues: {
       title: product?.title || "",
       description: product?.description || "",
-      category: product?.category || "",
-      price_pkr: product?.price_pkr || 0,
-      stock: product?.stock || 0,
+      category: product?.category || "Components",
+      price_pkr: product?.price_pkr ?? ("" as any),
+      stock: product?.stock ?? 50,
       image_url: product?.image_url || "",
       gallery_urls: product?.gallery_urls || [],
       manufacturer: product?.manufacturer || "",
       color: product?.color || "",
       availability: product?.availability || "in_stock",
-      discount_pct: product?.discount_pct || 0,
+      discount_pct: product?.discount_pct ?? ("" as any),
     },
   });
 
@@ -123,15 +136,15 @@ export function ProductEditor({
       form.reset({
         title: product.title || "",
         description: product.description || "",
-        category: product.category || "",
-        price_pkr: product.price_pkr ?? 0,
-        stock: product.stock ?? 0,
+        category: product.category || "Components",
+        price_pkr: product.price_pkr ?? ("" as any),
+        stock: product.stock ?? 50,
         image_url: product.image_url || "",
         gallery_urls: product.gallery_urls || [],
         manufacturer: product.manufacturer || "",
         color: product.color || "",
         availability: product.availability || "in_stock",
-        discount_pct: product.discount_pct ?? 0,
+        discount_pct: product.discount_pct ?? ("" as any),
       });
     } else {
       setTechSpecs({
@@ -148,15 +161,15 @@ export function ProductEditor({
       form.reset({
         title: "",
         description: "",
-        category: "",
-        price_pkr: 0,
-        stock: 0,
+        category: "Components",
+        price_pkr: "" as any,
+        stock: 50,
         image_url: "",
         gallery_urls: [],
         manufacturer: "",
         color: "",
         availability: "in_stock",
-        discount_pct: 0,
+        discount_pct: "" as any,
       });
     }
   }, [product, form]);
@@ -196,6 +209,32 @@ export function ProductEditor({
         tags: tagsArr,
       };
 
+      const targetId = product?.id || `mock-${Date.now()}`;
+      const newSlug = product?.slug || `${slug}-${Math.floor(Math.random() * 10000)}`;
+
+      const localProduct = {
+        id: targetId,
+        title: payload.title || "",
+        slug: newSlug,
+        description: payload.description || "",
+        category: payload.category || "Components",
+        price_pkr: Number(payload.price_pkr) || 0,
+        stock: Number(payload.stock) || 50,
+        image_url: payload.image_url || "",
+        gallery_urls: payload.gallery_urls || [],
+        manufacturer: payload.manufacturer || "",
+        discount_pct: Number(payload.discount_pct) || 0,
+        availability: payload.availability || "in_stock",
+        rating: product?.rating || 4.5,
+        color: payload.color || "",
+        vendor_id: vendorId || "demo-vendor",
+        specs: specsObj,
+        tags: tagsArr,
+      };
+
+      // Always save locally so client catalog receives it immediately
+      saveLocalProduct(localProduct as any);
+
       if (product?.id) {
         // Edit
         try {
@@ -204,58 +243,34 @@ export function ProductEditor({
             .update(payload)
             .eq("id", product.id)
             .eq("vendor_id", vendorId);
-          if (error) throw error;
-          toast.success("Product updated successfully (Database)");
+          if (error) console.warn("Supabase update error:", error);
         } catch (err: any) {
-          console.warn("Supabase update failed, falling back to local storage:", err);
-          const localProduct = {
-            ...product,
-            ...payload,
-            price_pkr: Number(payload.price_pkr) || 0,
-            stock: Number(payload.stock) || 0,
-            discount_pct: Number(payload.discount_pct) || 0,
-            gallery_urls: payload.gallery_urls,
-          };
-          saveLocalProduct(localProduct as any);
-          toast.success("Product updated successfully (Local Storage)");
+          console.warn("Supabase update failed, saved locally:", err);
         }
+        toast.success("Product updated successfully");
       } else {
         // Add
-        const newSlug = `${slug}-${Math.floor(Math.random() * 10000)}`;
         try {
-          const { error } = await supabase.from("products").insert({
-            ...payload,
-            slug: newSlug,
-          });
-          if (error) throw error;
-          toast.success("Product added successfully (Database)");
+          const { data, error } = await supabase
+            .from("products")
+            .insert({ ...payload, slug: newSlug })
+            .select("id")
+            .maybeSingle();
+          if (!error && data?.id) {
+            saveLocalProduct({ ...localProduct, id: data.id } as any);
+          }
         } catch (err: any) {
-          console.warn("Supabase insert failed, falling back to local storage:", err);
-          const localProduct = {
-            id: `mock-${Date.now()}`,
-            title: payload.title || "",
-            slug: newSlug,
-            description: payload.description || "",
-            category: payload.category || "Components",
-            price_pkr: Number(payload.price_pkr) || 0,
-            stock: Number(payload.stock) || 0,
-            image_url: payload.image_url || "",
-            gallery_urls: payload.gallery_urls || [],
-            manufacturer: payload.manufacturer || "",
-            discount_pct: Number(payload.discount_pct) || 0,
-            availability: payload.availability || "in_stock",
-            rating: 4.5,
-            color: payload.color || "",
-            vendor_id: vendorId || "demo-vendor",
-            specs: {},
-          };
-          saveLocalProduct(localProduct as any);
-          toast.success("Product added successfully (Local Storage)");
+          console.warn("Supabase insert failed, saved locally:", err);
         }
+        toast.success("Product added successfully");
       }
 
-      qc.invalidateQueries({ queryKey: ["vendor-products", vendorId] });
+      qc.invalidateQueries({ queryKey: ["vendor-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
       qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["all-products"] });
+      qc.invalidateQueries({ queryKey: ["product"] });
+      qc.invalidateQueries({ queryKey: ["related"] });
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to save product");
@@ -321,7 +336,12 @@ export function ProductEditor({
 
             <div className="space-y-2">
               <Label>Price (PKR)</Label>
-              <Input type="number" {...form.register("price_pkr")} />
+              <Input
+                type="number"
+                min="1"
+                placeholder="e.g. 2500"
+                {...form.register("price_pkr")}
+              />
               {form.formState.errors.price_pkr && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.price_pkr.message}
@@ -331,7 +351,7 @@ export function ProductEditor({
 
             <div className="space-y-2">
               <Label>Stock</Label>
-              <Input type="number" {...form.register("stock")} />
+              <Input type="number" min="0" placeholder="e.g. 50" {...form.register("stock")} />
               {form.formState.errors.stock && (
                 <p className="text-xs text-destructive">{form.formState.errors.stock.message}</p>
               )}
@@ -367,7 +387,13 @@ export function ProductEditor({
 
             <div className="space-y-2">
               <Label>Discount % (Optional)</Label>
-              <Input type="number" {...form.register("discount_pct")} />
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="e.g. 10"
+                {...form.register("discount_pct")}
+              />
             </div>
 
             <div className="col-span-2">

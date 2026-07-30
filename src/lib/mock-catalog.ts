@@ -1,4 +1,9 @@
 import type { ProductRow } from "@/types/commerce";
+import {
+  getServerProductsFn,
+  saveServerProductFn,
+  deleteServerProductFn,
+} from "@/api/server-products";
 
 /** Small demo catalog when Supabase is empty — not a full fill, just enough to browse. */
 const IMG = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600";
@@ -290,6 +295,35 @@ export function initializeMockProductsOnClient(force = false) {
   }
 }
 
+export async function syncServerProducts() {
+  initializeMockProductsOnClient();
+  try {
+    const serverProducts = await getServerProductsFn();
+    if (Array.isArray(serverProducts) && serverProducts.length > 0) {
+      for (const sp of serverProducts) {
+        const idx = MOCK_PRODUCTS.findIndex(
+          (p) => p.id === sp.id || (sp.slug && p.slug === sp.slug),
+        );
+        if (idx >= 0) {
+          MOCK_PRODUCTS[idx] = sp;
+        } else {
+          MOCK_PRODUCTS.unshift(sp);
+        }
+      }
+      if (isBrowser) {
+        try {
+          localStorage.setItem("nexus_local_products", JSON.stringify(MOCK_PRODUCTS));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Could not sync server products:", e);
+  }
+  return MOCK_PRODUCTS;
+}
+
 export function saveLocalProduct(product: ProductRow) {
   initializeMockProductsOnClient();
   const targetId = product.id || `mock-${Date.now()}`;
@@ -310,6 +344,12 @@ export function saveLocalProduct(product: ProductRow) {
       console.error("Failed to save local product:", e);
     }
   }
+
+  // Persist to server so other devices receive this product immediately
+  saveServerProductFn({ data: normalizedProduct as any }).catch((err) => {
+    console.warn("Server save error:", err);
+  });
+
   return normalizedProduct;
 }
 
@@ -326,6 +366,11 @@ export function deleteLocalProduct(id: string) {
       }
     }
   }
+
+  // Delete from server so other devices reflect deletion
+  deleteServerProductFn({ data: { id } }).catch((err) => {
+    console.warn("Server delete error:", err);
+  });
 }
 
 export function getMockProductBySlug(slug: string) {

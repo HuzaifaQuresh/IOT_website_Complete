@@ -6,6 +6,7 @@ import {
   initializeMockProductsOnClient,
   saveLocalProduct,
   deleteLocalProduct,
+  syncServerProducts,
 } from "@/lib/mock-products";
 import type { ProductRow } from "@/types/commerce";
 
@@ -48,6 +49,7 @@ function withTimeout<T>(promise: Promise<T>, ms = 800): Promise<T> {
 
 export async function fetchProducts(opts?: { category?: string; limit?: number }) {
   initializeMockProductsOnClient();
+  await syncServerProducts();
   if (!isSupabaseConfigured()) {
     return filterMockProducts(opts);
   }
@@ -79,6 +81,7 @@ export async function fetchProducts(opts?: { category?: string; limit?: number }
 
 export async function fetchProductBySlug(slug: string) {
   initializeMockProductsOnClient();
+  await syncServerProducts();
   if (!slug) return getMockProductBySlug("");
 
   // Check local catalog first (useful for freshly added local products)

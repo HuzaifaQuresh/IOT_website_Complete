@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtPKR } from "@/lib/format";
 import { getVendorMockProducts } from "@/lib/mock-data";
+import { syncServerProducts } from "@/lib/mock-products";
 import { DashboardPageHeader, ResponsiveScroll, EmptyState } from "@/components/site/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ function VendorProducts() {
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-products", vendorId],
     queryFn: async () => {
+      await syncServerProducts();
       try {
         let q = supabase.from("products").select("*").order("created_at", { ascending: false });
         if (vendorId) q = q.eq("vendor_id", vendorId);

@@ -32,6 +32,7 @@ import {
   saveLocalProduct,
   deleteLocalProduct,
   initializeMockProductsOnClient,
+  syncServerProducts,
 } from "@/lib/mock-products";
 import {
   ImageOptimizerUploader,
@@ -51,12 +52,12 @@ type Form = {
   slug: string;
   description: string;
   category: string;
-  price_pkr: number;
-  stock: number;
+  price_pkr: number | "";
+  stock: number | "";
   image_url: string;
   gallery_urls: string[];
   manufacturer: string;
-  discount_pct: number;
+  discount_pct: number | "";
   availability: string;
   protocol: string;
   power: string;
@@ -70,12 +71,12 @@ const EMPTY: Form = {
   slug: "",
   description: "",
   category: "Components",
-  price_pkr: 0,
-  stock: 0,
+  price_pkr: "",
+  stock: 50,
   image_url: "",
   gallery_urls: [],
   manufacturer: "",
-  discount_pct: 0,
+  discount_pct: "",
   availability: "in_stock",
   protocol: "Zigbee 3.0",
   power: "12V DC / Battery",
@@ -133,6 +134,7 @@ function AdminProducts() {
     queryKey: ["admin-products"],
     queryFn: async () => {
       initializeMockProductsOnClient();
+      await syncServerProducts();
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await withTimeout(
@@ -177,17 +179,29 @@ function AdminProducts() {
 
   const save = async () => {
     if (!form.title.trim()) return toast.error("Title is required");
+
+    const parsedPrice =
+      typeof form.price_pkr === "number" ? form.price_pkr : Number(form.price_pkr);
+    if (!parsedPrice || isNaN(parsedPrice) || parsedPrice <= 0) {
+      return toast.error("Please enter a valid price (PKR) greater than 0");
+    }
+
+    const parsedStock =
+      typeof form.stock === "number"
+        ? form.stock
+        : form.stock === ""
+          ? 50
+          : Number(form.stock) || 0;
+
+    const parsedDiscount =
+      typeof form.discount_pct === "number" ? form.discount_pct : Number(form.discount_pct) || 0;
+
     const slug =
       form.slug.trim() ||
       form.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-
-    // Explicitly build payload and ensure numbers are parsed
-    const price_pkr = Number(form.price_pkr) || 0;
-    const stock = Number(form.stock) || 0;
-    const discount_pct = Number(form.discount_pct) || 0;
 
     const specsObj: Record<string, string> = {};
     if (form.protocol.trim()) specsObj.protocol = form.protocol.trim();
@@ -211,10 +225,10 @@ function AdminProducts() {
       slug,
       description: form.description.trim() || null,
       category: form.category || "Components",
-      price_pkr,
-      stock,
+      price_pkr: parsedPrice,
+      stock: parsedStock,
       manufacturer: form.manufacturer.trim() || null,
-      discount_pct,
+      discount_pct: parsedDiscount,
       image_url: form.image_url.trim() || null,
       gallery_urls: form.gallery_urls || [],
       availability: (form.availability || "in_stock") as
@@ -264,8 +278,13 @@ function AdminProducts() {
     toast.success(form.id ? "Product updated successfully!" : "Product created successfully!");
     setOpen(false);
     setForm(EMPTY);
+
     qc.invalidateQueries({ queryKey: ["admin-products"] });
+    qc.invalidateQueries({ queryKey: ["vendor-products"] });
     qc.invalidateQueries({ queryKey: ["products"] });
+    qc.invalidateQueries({ queryKey: ["all-products"] });
+    qc.invalidateQueries({ queryKey: ["product"] });
+    qc.invalidateQueries({ queryKey: ["related"] });
   };
 
   const del = async (id: string) => {
@@ -280,7 +299,11 @@ function AdminProducts() {
     }
     toast.success("Product deleted successfully");
     qc.invalidateQueries({ queryKey: ["admin-products"] });
+    qc.invalidateQueries({ queryKey: ["vendor-products"] });
     qc.invalidateQueries({ queryKey: ["products"] });
+    qc.invalidateQueries({ queryKey: ["all-products"] });
+    qc.invalidateQueries({ queryKey: ["product"] });
+    qc.invalidateQueries({ queryKey: ["related"] });
   };
 
   return (
@@ -395,9 +418,13 @@ function AdminProducts() {
                   <Label>Price (PKR) *</Label>
                   <Input
                     type="number"
-                    min="0"
-                    value={form.price_pkr ?? 0}
-                    onChange={(e) => setForm({ ...form, price_pkr: Number(e.target.value) })}
+                    min="1"
+                    placeholder="e.g. 2500"
+                    value={form.price_pkr}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, price_pkr: v === "" ? "" : Number(v) });
+                    }}
                   />
                 </div>
                 <div>
@@ -405,8 +432,12 @@ function AdminProducts() {
                   <Input
                     type="number"
                     min="0"
-                    value={form.stock ?? 0}
-                    onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
+                    placeholder="e.g. 50"
+                    value={form.stock}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, stock: v === "" ? "" : Number(v) });
+                    }}
                   />
                 </div>
                 <div>
@@ -415,8 +446,12 @@ function AdminProducts() {
                     type="number"
                     min="0"
                     max="100"
-                    value={form.discount_pct ?? 0}
-                    onChange={(e) => setForm({ ...form, discount_pct: Number(e.target.value) })}
+                    placeholder="e.g. 10"
+                    value={form.discount_pct}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, discount_pct: v === "" ? "" : Number(v) });
+                    }}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -602,12 +637,12 @@ function AdminProducts() {
                               slug: p.slug || "",
                               description: p.description || "",
                               category: p.category || "Components",
-                              price_pkr: p.price_pkr ?? 0,
-                              stock: p.stock ?? 0,
+                              price_pkr: p.price_pkr ?? "",
+                              stock: p.stock ?? 50,
                               image_url: p.image_url || "",
                               gallery_urls: p.gallery_urls || [],
                               manufacturer: p.manufacturer || "",
-                              discount_pct: p.discount_pct ?? 0,
+                              discount_pct: p.discount_pct ?? "",
                               availability: p.availability || "in_stock",
                               protocol,
                               power,
