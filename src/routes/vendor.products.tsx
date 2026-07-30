@@ -184,7 +184,7 @@ function VendorProducts() {
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                         <Button asChild size="sm" variant="ghost" className="h-8 px-2">
-                          <Link to="/products/$slug" params={{ slug: p.slug }}>
+                          <Link to="/products/$slug" params={{ slug: p.slug || p.id }}>
                             <ExternalLink className="h-4 w-4 text-muted-foreground" />
                           </Link>
                         </Button>

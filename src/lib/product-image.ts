@@ -47,22 +47,38 @@ export function productImageSrcSet(src: string | null | undefined): string | und
 
 export function buildProductGalleryImages(
   imageUrl: string | null | undefined,
-  galleryUrls?: string[] | null,
+  galleryUrls?: string[] | null | unknown,
 ): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
 
-  const add = (u: string | null | undefined) => {
-    const key = u?.trim();
+  const add = (u: unknown) => {
+    if (typeof u !== "string") return;
+    const key = u.trim();
     if (!key || seen.has(key)) return;
     seen.add(key);
     out.push(key);
   };
 
   add(imageUrl);
-  for (const u of galleryUrls ?? []) add(u);
 
-  if (out.length === 1 && out[0].includes("images.unsplash.com")) {
+  let list: unknown[] = [];
+  if (Array.isArray(galleryUrls)) {
+    list = galleryUrls;
+  } else if (typeof galleryUrls === "string") {
+    try {
+      const parsed = JSON.parse(galleryUrls);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  for (const item of list) {
+    add(item);
+  }
+
+  if (out.length === 1 && typeof out[0] === "string" && out[0].includes("images.unsplash.com")) {
     const base = out[0].split("?")[0];
     const variants = [
       `${base}?w=800&q=82&auto=format&fit=crop`,

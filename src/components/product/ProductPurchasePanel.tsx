@@ -14,15 +14,18 @@ import {
   Truck,
   Headset,
   Tag,
+  Check,
 } from "lucide-react";
 import { fmtPKR, AVAILABILITY_LABEL } from "@/lib/format";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { ProductRow } from "@/types/commerce";
 import { calcVoucherDiscount } from "@/api/vouchers";
 import type { Voucher } from "@/types/commerce";
+import { cn } from "@/lib/utils";
 
 type Props = {
   product: ProductRow;
@@ -31,28 +34,40 @@ type Props = {
 
 export function ProductPurchasePanel({ product, activeVoucher }: Props) {
   const { add } = useCart();
+  const { isWishlisted, toggleWishlist, setDrawerOpen: openWishlistDrawer } = useWishlist();
   const navigate = useNavigate();
   const [qty, setQty] = useState(1);
+  const [copied, setCopied] = useState(false);
 
+  const discountPct = Number(product.discount_pct) || 0;
+  const pricePkr = Number(product.price_pkr) || 0;
   const inStock = product.availability === "in_stock" && product.stock > 0;
-  const original =
-    product.discount_pct > 0 ? product.price_pkr / (1 - product.discount_pct / 100) : null;
+  const original = discountPct > 0 ? pricePkr / (1 - discountPct / 100) : null;
+
+  const safeTags = Array.isArray(product.tags) ? product.tags : [];
+  const safeSpecs =
+    product.specs && typeof product.specs === "object"
+      ? (product.specs as Record<string, string>)
+      : {};
 
   const iotMeta = [
     {
       icon: Wifi,
       label: "Protocol",
-      value: product.tags?.find((t) => /zigbee|wifi|matter|bluetooth/i.test(t)) ?? "Zigbee 3.0",
+      value:
+        safeSpecs?.protocol ||
+        safeTags.find((t) => /zigbee|wifi|matter|bluetooth|lora|z-wave/i.test(t)) ||
+        "Zigbee 3.0",
     },
     {
       icon: Zap,
       label: "Power",
-      value: (product.specs as Record<string, string>)?.power ?? "12V DC / Battery",
+      value: safeSpecs?.power || "12V DC / Battery",
     },
     {
       icon: Cpu,
       label: "Ecosystem",
-      value: (product.specs as Record<string, string>)?.ecosystem ?? "Tuya Smart / Smart Life",
+      value: safeSpecs?.ecosystem || "Tuya Smart / Smart Life",
     },
   ];
 
@@ -71,6 +86,56 @@ export function ProductPurchasePanel({ product, activeVoucher }: Props) {
     }
     add(cartPayload, qty);
     navigate({ to: "/checkout" });
+  };
+
+  const isFav = isWishlisted(product.id);
+
+  const handleToggleWishlist = () => {
+    toggleWishlist({
+      id: product.id,
+      title: product.title,
+      price_pkr: product.price_pkr,
+      image_url: product.image_url,
+      slug: product.slug,
+      category: product.category,
+    });
+  };
+
+  const handleShare = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const shareData = {
+      title: product.title,
+      text: `Check out ${product.title} on NexusIoT Pakistan!`,
+      url,
+    };
+
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare(shareData)
+    ) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        toast.success("Product link copied to clipboard!");
+        setTimeout(() => setCopied(false), 2500);
+        return;
+      } catch {
+        // Fallback
+      }
+    }
+
+    toast.info(`Link: ${url}`);
   };
 
   return (
@@ -114,7 +179,7 @@ export function ProductPurchasePanel({ product, activeVoucher }: Props) {
           variant={inStock ? "default" : "secondary"}
           className={inStock ? "bg-emerald-600 text-white" : ""}
         >
-          {AVAILABILITY_LABEL[product.availability]}
+          {AVAILABILITY_LABEL[product.availability || "in_stock"] || "In Stock"}
           {inStock && ` • ${product.stock} available`}
         </Badge>
       </div>
@@ -130,9 +195,9 @@ export function ProductPurchasePanel({ product, activeVoucher }: Props) {
         ))}
       </div>
 
-      {product.tags && product.tags.length > 0 && (
+      {safeTags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {product.tags.map((t) => (
+          {safeTags.map((t) => (
             <Badge key={t} variant="outline">
               #{t}
             </Badge>
@@ -180,19 +245,52 @@ export function ProductPurchasePanel({ product, activeVoucher }: Props) {
         </Button>
       </div>
 
-      <div className="mt-3 flex gap-2 text-xs">
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
+          onClick={handleToggleWishlist}
+          className={cn(
+            "inline-flex items-center gap-1.5 font-medium px-3 py-1.5 rounded-md border transition-all cursor-pointer",
+            isFav
+              ? "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/60 border-border",
+          )}
         >
-          <Heart className="h-4 w-4" /> Wishlist
+          <Heart
+            className={cn(
+              "h-4 w-4 transition-transform active:scale-125",
+              isFav && "fill-rose-500 text-rose-500",
+            )}
+          />
+          {isFav ? "Saved in Wishlist" : "Add to Wishlist"}
         </button>
-        <span className="text-muted-foreground">•</span>
+
+        <span className="text-muted-foreground/40">•</span>
+
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary"
+          onClick={handleShare}
+          className="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 px-3 py-1.5 rounded-md border border-border transition-all cursor-pointer"
         >
-          <Share2 className="h-4 w-4" /> Share
+          {copied ? (
+            <>
+              <Check className="h-4 w-4 text-emerald-600" />
+              <span className="text-emerald-600">Copied Link!</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="h-4 w-4" />
+              <span>Share Product</span>
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openWishlistDrawer(true)}
+          className="ml-auto text-xs text-primary hover:underline font-medium"
+        >
+          View Wishlist →
         </button>
       </div>
 

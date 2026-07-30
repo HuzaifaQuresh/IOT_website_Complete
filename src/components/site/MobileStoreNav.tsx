@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, LayoutGrid, ShoppingCart, User2 } from "lucide-react";
+import { Home, LayoutGrid, ShoppingCart, User2, Heart } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +14,7 @@ const NAV = [
 export function MobileStoreNav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { count, setDrawerOpen } = useCart();
+  const { count: wishlistCount, setDrawerOpen: setWishlistOpen } = useWishlist();
   const { user } = useAuth();
 
   const accountTo = user ? "/account" : "/auth";
@@ -65,6 +67,20 @@ export function MobileStoreNav() {
             </Link>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setWishlistOpen(true)}
+          className="relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
+        >
+          <Heart className={cn("h-5 w-5", wishlistCount > 0 && "text-rose-500 fill-rose-500")} />
+          Wishlist
+          {wishlistCount > 0 && (
+            <span className="absolute top-1 right-[calc(50%-1.25rem)] grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+              {wishlistCount > 9 ? "9+" : wishlistCount}
+            </span>
+          )}
+        </button>
+
         <Link
           to={accountTo}
           className={cn(

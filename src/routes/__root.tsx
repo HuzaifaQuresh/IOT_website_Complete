@@ -12,9 +12,11 @@ import {
 
 import appCss from "../styles.css?url";
 import { CartProvider } from "@/contexts/CartContext";
+import { WishlistProvider } from "@/contexts/WishlistContext";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { CartDrawer } from "@/components/site/CartDrawer";
+import { WishlistDrawer } from "@/components/site/WishlistDrawer";
 import { MobileStoreNav } from "@/components/site/MobileStoreNav";
 import { Toaster } from "@/components/ui/sonner";
 import { initializeMockProductsOnClient } from "@/lib/mock-products";
@@ -153,16 +155,19 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        {!isDashboard && <Header />}
-        <main className={isDashboard ? "min-h-screen" : "min-h-[60vh] storefront-main"}>
-          <Outlet />
-        </main>
-        {!isDashboard && <Footer />}
-        {!isDashboard && <MobileStoreNav />}
-        <CartDrawer />
-        <Toaster richColors position="top-right" />
-      </CartProvider>
+      <WishlistProvider>
+        <CartProvider>
+          {!isDashboard && <Header />}
+          <main className={isDashboard ? "min-h-screen" : "min-h-[60vh] storefront-main"}>
+            <Outlet />
+          </main>
+          {!isDashboard && <Footer />}
+          {!isDashboard && <MobileStoreNav />}
+          <CartDrawer />
+          <WishlistDrawer />
+          <Toaster richColors position="top-right" />
+        </CartProvider>
+      </WishlistProvider>
     </QueryClientProvider>
   );
 }

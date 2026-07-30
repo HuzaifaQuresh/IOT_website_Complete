@@ -1,11 +1,13 @@
 import React from "react";
 import { Link } from "@tanstack/react-router";
-import { ShoppingCart, Star } from "lucide-react";
+import { ShoppingCart, Star, Heart } from "lucide-react";
 import { fmtPKR } from "@/lib/format";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { optimizeProductImageUrl } from "@/lib/product-image";
+import { cn } from "@/lib/utils";
 
 export type Product = {
   id: string;
@@ -31,10 +33,25 @@ export const ProductCard = React.memo(function ProductCard({
   priority?: boolean;
 }) {
   const { add } = useCart();
+  const { isWishlisted, toggleWishlist } = useWishlist();
   const original = p.discount_pct > 0 ? p.price_pkr / (1 - p.discount_pct / 100) : null;
   const inStock = p.availability === "in_stock" && p.stock > 0;
   const detailTo = "/products/$slug" as const;
   const productSlug = p.slug || p.id;
+  const isFav = isWishlisted(p.id);
+
+  const onToggleFav = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWishlist({
+      id: p.id,
+      title: p.title,
+      price_pkr: p.price_pkr,
+      image_url: p.image_url,
+      slug: productSlug,
+      category: p.category,
+    });
+  };
 
   const onAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -158,8 +175,23 @@ export const ProductCard = React.memo(function ProductCard({
             -{p.discount_pct}%
           </span>
         )}
+        <button
+          type="button"
+          onClick={onToggleFav}
+          aria-label={isFav ? "Remove from wishlist" : "Add to wishlist"}
+          className={cn(
+            "absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-md transition-all shadow-sm z-10",
+            isFav
+              ? "bg-rose-50 text-rose-600 hover:bg-rose-100"
+              : "bg-white/80 text-slate-600 hover:text-rose-600 hover:bg-white",
+          )}
+        >
+          <Heart
+            className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4", isFav && "fill-rose-500 text-rose-500")}
+          />
+        </button>
         {!inStock && (
-          <span className="absolute top-2 right-2 bg-slate-900/85 text-white text-[9px] font-bold px-2 py-0.5 rounded">
+          <span className="absolute bottom-2 right-2 bg-slate-900/85 text-white text-[9px] font-bold px-2 py-0.5 rounded">
             Out of Stock
           </span>
         )}

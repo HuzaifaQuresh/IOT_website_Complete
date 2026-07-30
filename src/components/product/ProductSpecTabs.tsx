@@ -16,13 +16,26 @@ export function ProductSpecTabs({ product }: { product: ProductRow }) {
     product.specs && typeof product.specs === "object"
       ? Object.entries(product.specs as Record<string, string>)
       : [];
+
+  const formattedCustom = custom.map(([k, v]) => {
+    let label = k;
+    if (k === "protocol") label = "Wireless Protocol";
+    else if (k === "power") label = "Power Supply";
+    else if (k === "ecosystem") label = "Smart Ecosystem";
+    return [label, String(v)] as [string, string];
+  });
+
   const specs: [string, string][] = [
     ["Manufacturer", product.manufacturer ?? "—"],
     ["Category", product.category],
-    ...custom,
-    ...DEFAULT_SPECS,
-    ["SKU", product.id.slice(0, 8).toUpperCase()],
+    ...formattedCustom,
   ];
+
+  if (formattedCustom.length === 0) {
+    specs.push(...DEFAULT_SPECS);
+  }
+
+  specs.push(["SKU", (product.id || "PROD").slice(0, 8).toUpperCase()]);
 
   return (
     <section className="mt-12 rounded-xl border bg-card p-4 sm:p-6">

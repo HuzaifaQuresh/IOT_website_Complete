@@ -9,7 +9,8 @@ import { DashboardPageHeader, SectionCard } from "@/components/site/PageLayout";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import type { DeliveryMethod, PaymentMethod } from "@/types/commerce";
-import { CreditCard, Percent, Truck } from "lucide-react";
+import { CreditCard, Percent, Truck, Image as ImageIcon, Sparkles } from "lucide-react";
+import { ImageOptimizerUploader } from "@/components/ui/ImageOptimizerUploader";
 
 export const Route = createFileRoute("/admin/settings")({ component: AdminSettings });
 
@@ -30,6 +31,8 @@ function AdminSettings() {
     free_shipping_min_pkr: "15000",
     cod_handling_fee_pkr: "0",
   });
+  const [siteLogo, setSiteLogo] = useState("");
+  const [heroBanner, setHeroBanner] = useState("");
   const [payments, setPayments] = useState<PaymentMethod[]>([]);
   const [delivery, setDelivery] = useState<DeliveryMethod[]>([]);
 
@@ -130,6 +133,30 @@ function AdminSettings() {
         </div>
         <Button onClick={saveMeta} className="mt-4">
           Save general
+        </Button>
+      </SectionCard>
+
+      <SectionCard title="Media & Image CDN Optimization">
+        <div className="space-y-4">
+          <ImageOptimizerUploader
+            value={siteLogo}
+            onChange={setSiteLogo}
+            label="Super Admin / Marketplace Branding Logo"
+            description="Upload main site logo. Auto-converts to WebP with native lazy loading."
+            maxWidth={500}
+            maxHeight={500}
+          />
+          <ImageOptimizerUploader
+            value={heroBanner}
+            onChange={setHeroBanner}
+            label="Home Page Hero Banner"
+            description="Upload hero banner image. Compressed before upload for fast page load."
+            maxWidth={1920}
+            maxHeight={900}
+          />
+        </div>
+        <Button onClick={saveMeta} className="mt-4">
+          Save Media Assets
         </Button>
       </SectionCard>
 

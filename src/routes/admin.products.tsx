@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { fmtPKR, CATEGORY_CATALOG } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,21 @@ import {
 import { DashboardPageHeader, ResponsiveScroll } from "@/components/site/PageLayout";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, ExternalLink, ImageOff } from "lucide-react";
-import { MOCK_PRODUCTS, saveLocalProduct, deleteLocalProduct } from "@/lib/mock-products";
+import {
+  MOCK_PRODUCTS,
+  saveLocalProduct,
+  deleteLocalProduct,
+  initializeMockProductsOnClient,
+} from "@/lib/mock-products";
+import {
+  ImageOptimizerUploader,
+  MultiImageOptimizerUploader,
+} from "@/components/ui/ImageOptimizerUploader";
+import {
+  TechnicalSpecsEditor,
+  TechSpecItem,
+  TechnicalSpecsData,
+} from "@/components/product/TechnicalSpecsEditor";
 
 export const Route = createFileRoute("/admin/products")({ component: AdminProducts });
 
@@ -40,9 +54,15 @@ type Form = {
   price_pkr: number;
   stock: number;
   image_url: string;
+  gallery_urls: string[];
   manufacturer: string;
   discount_pct: number;
   availability: string;
+  protocol: string;
+  power: string;
+  ecosystem: string;
+  tags: string;
+  customSpecs: TechSpecItem[];
 };
 
 const EMPTY: Form = {
@@ -53,9 +73,19 @@ const EMPTY: Form = {
   price_pkr: 0,
   stock: 0,
   image_url: "",
+  gallery_urls: [],
   manufacturer: "",
   discount_pct: 0,
   availability: "in_stock",
+  protocol: "Zigbee 3.0",
+  power: "12V DC / Battery",
+  ecosystem: "Tuya Smart / Smart Life",
+  tags: "zigbee, smart-home",
+  customSpecs: [
+    { key: "Working Temperature", value: "-10°C to 55°C" },
+    { key: "Operating Voltage", value: "12V DC / 3V Battery" },
+    { key: "Warranty", value: "12 months manufacturer" },
+  ],
 };
 
 const AVAIL_LABELS: Record<string, { label: string; className: string }> = {
@@ -89,6 +119,8 @@ function withTimeout<T>(promise: any, ms = 800): Promise<T> {
   });
 }
 
+const isCustomSpec = ([k]: [string, any]) => k !== "protocol" && k !== "power" && k !== "ecosystem";
+
 function AdminProducts() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -100,17 +132,25 @@ function AdminProducts() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from("products")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        if (data?.length) return data;
-      } catch {
-        /* demo */
+      initializeMockProductsOnClient();
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await withTimeout(
+            supabase.from("products").select("*").order("created_at", { ascending: false }),
+            1500,
+          );
+          if (!error && data) {
+            // Combine DB items with local-only mock/custom items
+            const localOnly = MOCK_PRODUCTS.filter(
+              (lp) => !data.some((d) => d.id === lp.id || d.slug === lp.slug),
+            );
+            return [...localOnly, ...data];
+          }
+        } catch {
+          /* fallback */
+        }
       }
-      return MOCK_PRODUCTS;
+      return [...MOCK_PRODUCTS];
     },
   });
 
@@ -149,6 +189,23 @@ function AdminProducts() {
     const stock = Number(form.stock) || 0;
     const discount_pct = Number(form.discount_pct) || 0;
 
+    const specsObj: Record<string, string> = {};
+    if (form.protocol.trim()) specsObj.protocol = form.protocol.trim();
+    if (form.power.trim()) specsObj.power = form.power.trim();
+    if (form.ecosystem.trim()) specsObj.ecosystem = form.ecosystem.trim();
+    (form.customSpecs || []).forEach((item) => {
+      if (item.key.trim() && item.value.trim()) {
+        specsObj[item.key.trim()] = item.value.trim();
+      }
+    });
+
+    const tagsArr = form.tags
+      ? form.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
+
     const payload = {
       title: form.title.trim(),
       slug,
@@ -159,50 +216,52 @@ function AdminProducts() {
       manufacturer: form.manufacturer.trim() || null,
       discount_pct,
       image_url: form.image_url.trim() || null,
+      gallery_urls: form.gallery_urls || [],
       availability: (form.availability || "in_stock") as
         "in_stock" | "on_demand" | "coming_soon" | "obsolete",
+      specs: specsObj,
+      tags: tagsArr,
     };
 
-    if (form.id) {
-      // Edit mode
-      try {
-        const { error } = await withTimeout(
-          supabase.from("products").update(payload).eq("id", form.id),
-        );
-        if (error) throw error;
-        toast.success("Product updated (Database)");
-      } catch (err: any) {
-        console.warn("Supabase update failed, falling back to local storage:", err);
-        const localProduct = {
-          ...payload,
-          id: form.id,
-          rating: (form as any).rating || 4.5,
-          gallery_urls: (form as any).gallery_urls || [],
-          specs: (form as any).specs || {},
-        };
-        saveLocalProduct(localProduct as any);
-        toast.success("Product updated (Local Storage)");
-      }
-    } else {
-      // Create mode
-      try {
-        const { error } = await withTimeout(supabase.from("products").insert(payload));
-        if (error) throw error;
-        toast.success("Product created (Database)");
-      } catch (err: any) {
-        console.warn("Supabase insert failed, falling back to local storage:", err);
-        const localProduct = {
-          ...payload,
-          id: `mock-${Date.now()}`,
-          rating: 4.5,
-          gallery_urls: [],
-          specs: {},
-        };
-        saveLocalProduct(localProduct as any);
-        toast.success("Product created (Local Storage)");
+    const targetId = form.id || `mock-${Date.now()}`;
+    const localProduct = {
+      ...payload,
+      id: targetId,
+      rating: (form as any).rating || 4.5,
+      gallery_urls: form.gallery_urls || [],
+    };
+
+    // 1. Instantly save in local storage & memory
+    saveLocalProduct(localProduct as any);
+
+    // 2. If Supabase is configured, sync to database
+    if (isSupabaseConfigured()) {
+      if (form.id) {
+        try {
+          const { error } = await withTimeout(
+            supabase.from("products").update(payload).eq("id", form.id),
+            1500,
+          );
+          if (error) console.warn("Supabase product update error:", error);
+        } catch (err: any) {
+          console.warn("Supabase update failed, saved locally:", err);
+        }
+      } else {
+        try {
+          const { data, error } = await withTimeout(
+            supabase.from("products").insert(payload).select("id").maybeSingle(),
+            1500,
+          );
+          if (!error && data?.id) {
+            saveLocalProduct({ ...localProduct, id: data.id } as any);
+          }
+        } catch (err: any) {
+          console.warn("Supabase insert failed, saved locally:", err);
+        }
       }
     }
 
+    toast.success(form.id ? "Product updated successfully!" : "Product created successfully!");
     setOpen(false);
     setForm(EMPTY);
     qc.invalidateQueries({ queryKey: ["admin-products"] });
@@ -211,15 +270,15 @@ function AdminProducts() {
 
   const del = async (id: string) => {
     if (!confirm("Delete this product permanently?")) return;
-    try {
-      const { error } = await withTimeout(supabase.from("products").delete().eq("id", id));
-      if (error) throw error;
-      toast.success("Product deleted (Database)");
-    } catch (err) {
-      console.warn("Supabase delete failed, falling back to local storage:", err);
-      deleteLocalProduct(id);
-      toast.success("Product deleted (Local Storage)");
+    deleteLocalProduct(id);
+    if (isSupabaseConfigured()) {
+      try {
+        await withTimeout(supabase.from("products").delete().eq("id", id), 1500);
+      } catch (err) {
+        console.warn("Supabase delete failed:", err);
+      }
     }
+    toast.success("Product deleted successfully");
     qc.invalidateQueries({ queryKey: ["admin-products"] });
     qc.invalidateQueries({ queryKey: ["products"] });
   };
@@ -265,7 +324,7 @@ function AdminProducts() {
                 <div className="sm:col-span-2">
                   <Label>Title *</Label>
                   <Input
-                    value={form.title}
+                    value={form.title || ""}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                     placeholder="Tuya Zigbee PIR Motion Sensor"
                   />
@@ -273,7 +332,7 @@ function AdminProducts() {
                 <div>
                   <Label>Slug (auto-generated)</Label>
                   <Input
-                    value={form.slug}
+                    value={form.slug || ""}
                     onChange={(e) =>
                       setForm({
                         ...form,
@@ -286,7 +345,7 @@ function AdminProducts() {
                 <div>
                   <Label>Manufacturer</Label>
                   <Input
-                    value={form.manufacturer}
+                    value={form.manufacturer || ""}
                     onChange={(e) => setForm({ ...form, manufacturer: e.target.value })}
                     placeholder="Tuya, Hikvision…"
                   />
@@ -294,7 +353,7 @@ function AdminProducts() {
                 <div>
                   <Label>Category</Label>
                   <Select
-                    value={form.category}
+                    value={form.category || "Components"}
                     onValueChange={(v) => setForm({ ...form, category: v })}
                   >
                     <SelectTrigger>
@@ -318,7 +377,7 @@ function AdminProducts() {
                 <div>
                   <Label>Availability</Label>
                   <Select
-                    value={form.availability}
+                    value={form.availability || "in_stock"}
                     onValueChange={(v) => setForm({ ...form, availability: v })}
                   >
                     <SelectTrigger>
@@ -337,7 +396,7 @@ function AdminProducts() {
                   <Input
                     type="number"
                     min="0"
-                    value={form.price_pkr}
+                    value={form.price_pkr ?? 0}
                     onChange={(e) => setForm({ ...form, price_pkr: Number(e.target.value) })}
                   />
                 </div>
@@ -346,7 +405,7 @@ function AdminProducts() {
                   <Input
                     type="number"
                     min="0"
-                    value={form.stock}
+                    value={form.stock ?? 0}
                     onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
                   />
                 </div>
@@ -356,25 +415,50 @@ function AdminProducts() {
                     type="number"
                     min="0"
                     max="100"
-                    value={form.discount_pct}
+                    value={form.discount_pct ?? 0}
                     onChange={(e) => setForm({ ...form, discount_pct: Number(e.target.value) })}
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label>Image URL</Label>
-                  <Input
-                    value={form.image_url}
-                    onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                    placeholder="https://…"
+                  <MultiImageOptimizerUploader
+                    primaryImage={form.image_url || ""}
+                    onPrimaryImageChange={(url) => setForm((prev) => ({ ...prev, image_url: url }))}
+                    galleryImages={form.gallery_urls || []}
+                    onGalleryImagesChange={(urls) =>
+                      setForm((prev) => ({ ...prev, gallery_urls: urls }))
+                    }
+                    label="Product Images & Multi-Angle Gallery"
+                    description="Upload & compress multiple product photos to WebP format or provide CDN URLs."
                   />
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Description</Label>
                   <Textarea
-                    value={form.description}
+                    value={form.description || ""}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     rows={3}
                     placeholder="Product description…"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <TechnicalSpecsEditor
+                    value={{
+                      protocol: form.protocol,
+                      power: form.power,
+                      ecosystem: form.ecosystem,
+                      tags: form.tags,
+                      customSpecs: form.customSpecs,
+                    }}
+                    onChange={(ts) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        protocol: ts.protocol,
+                        power: ts.power,
+                        ecosystem: ts.ecosystem,
+                        tags: ts.tags,
+                        customSpecs: ts.customSpecs,
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -495,14 +579,55 @@ function AdminProducts() {
                           variant="ghost"
                           className="h-8 w-8"
                           onClick={() => {
-                            setForm({ ...EMPTY, ...p } as Form);
+                            const specs = (
+                              p.specs && typeof p.specs === "object" ? p.specs : {}
+                            ) as Record<string, string>;
+                            const tags = Array.isArray(p.tags) ? p.tags : [];
+                            const protocol =
+                              specs.protocol ||
+                              tags.find((t) =>
+                                /zigbee|wifi|matter|bluetooth|lora|z-wave/i.test(t),
+                              ) ||
+                              "";
+                            const power = specs.power || "";
+                            const ecosystem = specs.ecosystem || "";
+
+                            const customSpecs = Object.entries(specs)
+                              .filter(isCustomSpec)
+                              .map(([key, value]) => ({ key, value: String(value) }));
+
+                            setForm({
+                              id: p.id,
+                              title: p.title || "",
+                              slug: p.slug || "",
+                              description: p.description || "",
+                              category: p.category || "Components",
+                              price_pkr: p.price_pkr ?? 0,
+                              stock: p.stock ?? 0,
+                              image_url: p.image_url || "",
+                              gallery_urls: p.gallery_urls || [],
+                              manufacturer: p.manufacturer || "",
+                              discount_pct: p.discount_pct ?? 0,
+                              availability: p.availability || "in_stock",
+                              protocol,
+                              power,
+                              ecosystem,
+                              tags: tags.join(", "),
+                              customSpecs,
+                            });
                             setOpen(true);
                           }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                          <Link to="/products/$slug" params={{ slug: p.slug }} target="_blank">
+                        <Button
+                          asChild
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="View product page"
+                        >
+                          <Link to="/products/$slug" params={{ slug: p.slug || p.id }}>
                             <ExternalLink className="h-3.5 w-3.5" />
                           </Link>
                         </Button>

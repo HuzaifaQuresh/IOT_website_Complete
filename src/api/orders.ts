@@ -25,13 +25,28 @@ function saveLocalOrder(order: OrderWithItems) {
   }
 }
 
-export async function fetchOrders(opts?: { userId?: string }) {
+export async function fetchOrders(opts?: { userId?: string; email?: string }) {
   const local = getLocalOrders();
-  const filteredLocal = opts?.userId ? local.filter((o) => o.user_id === opts.userId) : local;
+  const searchUserId = opts?.userId?.trim();
+  const searchEmail = opts?.email?.trim().toLowerCase();
+
+  const filteredLocal = local.filter((o) => {
+    if (!searchUserId && !searchEmail) return true;
+    const matchUser = Boolean(searchUserId && o.user_id === searchUserId);
+    const matchEmail = Boolean(searchEmail && o.email?.toLowerCase() === searchEmail);
+    return matchUser || matchEmail;
+  });
 
   try {
     let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
-    if (opts?.userId) q = q.eq("user_id", opts.userId);
+    if (searchUserId && searchEmail) {
+      q = q.or(`user_id.eq.${searchUserId},email.ilike.${searchEmail}`);
+    } else if (searchUserId) {
+      q = q.eq("user_id", searchUserId);
+    } else if (searchEmail) {
+      q = q.ilike("email", searchEmail);
+    }
+
     const { data, error } = await q;
     if (error) throw error;
 
@@ -47,8 +62,11 @@ export async function fetchOrders(opts?: { userId?: string }) {
   } catch {
     const merged = [...filteredLocal];
     for (const mo of MOCK_ORDERS) {
-      const matchUserId = opts?.userId ? opts.userId === "demo-user-id-1234-5678" : true;
-      if (matchUserId && !merged.some((o) => o.id === mo.id)) {
+      const matchUserId = searchUserId
+        ? searchUserId === "demo-user-id-1234-5678" || searchUserId === mo.user_id
+        : true;
+      const matchEmail = searchEmail ? mo.email?.toLowerCase() === searchEmail : true;
+      if ((matchUserId || matchEmail) && !merged.some((o) => o.id === mo.id)) {
         merged.push(mo);
       }
     }
@@ -58,43 +76,52 @@ export async function fetchOrders(opts?: { userId?: string }) {
 }
 
 export async function fetchOrderWithItems(orderId: string): Promise<OrderWithItems | null> {
-  const local = getLocalOrders().find((o) => o.id === orderId);
+  if (!orderId) return null;
+  const cleanId = orderId.trim();
+
+  const local = getLocalOrders().find((o) => o.id.toLowerCase() === cleanId.toLowerCase());
   if (local) return local;
 
   try {
     const { data: order, error } = await supabase
       .from("orders")
       .select("*")
-      .eq("id", orderId)
+      .eq("id", cleanId)
       .maybeSingle();
     if (error) throw error;
     if (order) {
       const { data: items, error: iErr } = await supabase
         .from("order_items")
         .select("*")
-        .eq("order_id", orderId)
+        .eq("order_id", cleanId)
         .order("title");
       if (iErr) throw iErr;
       return { ...(order as OrderRow), items: items ?? [] };
     }
-  } catch {
-    /* demo */
+  } catch (err) {
+    console.warn("Failed to fetch order from Supabase:", err);
   }
-  return getMockOrderWithItems(orderId);
+  return getMockOrderWithItems(cleanId);
 }
 
-export async function fetchOrdersWithItems(opts?: { userId?: string }): Promise<OrderWithItems[]> {
+export async function fetchOrdersWithItems(opts?: {
+  userId?: string;
+  email?: string;
+}): Promise<OrderWithItems[]> {
+  const isFiltered = Boolean(opts?.userId || opts?.email);
   try {
     const orders = await fetchOrders(opts);
-    if (!orders.length) return MOCK_ORDERS_WITH_ITEMS;
+    if (!orders.length) {
+      return isFiltered ? [] : MOCK_ORDERS_WITH_ITEMS;
+    }
     const out: OrderWithItems[] = [];
     for (const o of orders) {
       const full = await fetchOrderWithItems(o.id);
       if (full) out.push(full);
     }
-    return out.length ? out : MOCK_ORDERS_WITH_ITEMS;
+    return out.length ? out : isFiltered ? [] : MOCK_ORDERS_WITH_ITEMS;
   } catch {
-    return MOCK_ORDERS_WITH_ITEMS;
+    return isFiltered ? [] : MOCK_ORDERS_WITH_ITEMS;
   }
 }
 

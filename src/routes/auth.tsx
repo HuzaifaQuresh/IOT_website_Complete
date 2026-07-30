@@ -1,14 +1,13 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { AppRole } from "@/types/commerce";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Cpu, ShieldCheck, Crown, Eye, EyeOff, Loader2, Store, User2 } from "lucide-react";
-import { RoleAccessGrid } from "@/components/dashboard/RoleAccessGrid";
+import { Cpu, ShieldCheck, Eye, EyeOff, Loader2, CheckCircle2, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign In — NexusIoT" }] }),
@@ -36,7 +35,7 @@ function friendlyError(msg: string): string {
 function Auth() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/auth" });
-  const defaultTab = search.tab === "signup" ? "signup" : "signin";
+  const [activeTab, setActiveTab] = useState<string>(search.tab === "signup" ? "signup" : "signin");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,31 +43,7 @@ function Auth() {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const handleDemoRoleSwitch = (role: AppRole) => {
-    localStorage.setItem("nexus_demo_role", role);
-    window.dispatchEvent(new Event("nexus-auth-update"));
-    toast.success(
-      `Demo Mode: Signed in as ${
-        role === "super_admin"
-          ? "Super Admin"
-          : role === "admin"
-            ? "Platform Admin"
-            : role === "vendor"
-              ? "Vendor Partner"
-              : "Customer"
-      }`,
-    );
-
-    if (role === "super_admin" || role === "admin") {
-      navigate({ to: "/admin" });
-    } else if (role === "vendor") {
-      navigate({ to: "/vendor" });
-    } else {
-      navigate({ to: "/account" });
-    }
-  };
-
-  /** Reads roles from DB and sends user to correct dashboard */
+  /** Reads roles from DB and sends user to correct workspace */
   const redirectAfterAuth = async () => {
     const {
       data: { session },
@@ -103,14 +78,25 @@ function Auth() {
   const signIn = async () => {
     if (!email.trim() || !password) return toast.error("Enter your email and password");
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-    setBusy(false);
-    if (error) return toast.error(friendlyError(error.message));
-    toast.success("Signed in successfully");
-    await redirectAfterAuth();
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      setBusy(false);
+
+      if (error) {
+        return toast.error(friendlyError(error.message));
+      }
+
+      toast.success("Signed in successfully");
+      await redirectAfterAuth();
+    } catch (err: any) {
+      setBusy(false);
+      toast.error(friendlyError(err?.message || "Failed to sign in"));
+    }
   };
 
   const signUp = async () => {
@@ -118,29 +104,40 @@ function Auth() {
     if (!password) return toast.error("Choose a password");
     if (password.length < 6) return toast.error("Password must be at least 6 characters");
     setBusy(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: { full_name: name.trim() },
-      },
-    });
-    setBusy(false);
-    if (error) return toast.error(friendlyError(error.message));
 
-    if (data.session) {
-      // Email confirm is OFF — user is signed in immediately
-      toast.success("Account created — welcome!");
-      await redirectAfterAuth();
-    } else {
-      // Email confirm is ON
-      toast.success("Account created! Check your email for a confirmation link.");
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { full_name: name.trim() },
+        },
+      });
+
+      setBusy(false);
+
+      if (error) {
+        return toast.error(friendlyError(error.message));
+      }
+
+      if (data?.session || !isSupabaseConfigured()) {
+        toast.success("Account created — welcome!");
+        await redirectAfterAuth();
+      } else {
+        toast.success("Account created! Check your email for a confirmation link.");
+      }
+    } catch (err: any) {
+      setBusy(false);
+      toast.error(friendlyError(err?.message || "Failed to create account"));
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") signIn();
+    if (e.key === "Enter") {
+      if (activeTab === "signin") signIn();
+      else signUp();
+    }
   };
 
   return (
@@ -150,31 +147,49 @@ function Auth() {
         className="hidden lg:flex flex-col justify-center px-12 text-white"
         style={{ background: "var(--gradient-hero)" }}
       >
-        <Cpu className="h-12 w-12 text-primary mb-6" />
+        <div className="flex items-center gap-3 mb-6">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground">
+            <Cpu className="h-6 w-6" />
+          </div>
+          <span className="text-2xl font-bold tracking-tight">NexusIoT</span>
+        </div>
+
         <h2 className="text-3xl font-bold tracking-tight">Welcome to NexusIoT</h2>
         <p className="mt-3 text-slate-200 max-w-md leading-relaxed">
-          Pakistan's professional IoT commerce platform. Sign in to manage products, track orders,
-          and access your workspace.
+          Pakistan's professional IoT automation & commerce portal. Sign in to manage orders,
+          explore custom solutions, and access your workspace.
         </p>
-        <ul className="mt-6 space-y-3 text-sm text-slate-300">
-          <li className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-            Secure Supabase authentication
-          </li>
-          <li className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-            Role-based access: super_admin, admin, vendor, customer
-          </li>
-          <li className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-            Password reset via email link
-          </li>
-        </ul>
-        <div className="mt-8 max-h-[min(50vh,380px)] overflow-y-auto pr-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
-            Platform roles
-          </p>
-          <RoleAccessGrid compact className="opacity-90" />
+
+        <div className="mt-8 space-y-4 text-sm text-slate-200">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-white">Secure Encrypted Authentication</p>
+              <p className="text-xs text-slate-300">
+                Industry-standard credentials protection with Supabase Auth
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-white">Real-Time Order Tracking</p>
+              <p className="text-xs text-slate-300">
+                Monitor dispatch, track shipment status, and access receipts
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <Lock className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-white">Personalized Workspace</p>
+              <p className="text-xs text-slate-300">
+                Saved addresses, order history, and account settings in one place
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -190,7 +205,7 @@ function Auth() {
           </div>
 
           <div className="rounded-2xl border bg-card p-6 sm:p-8 shadow-[var(--shadow-elevated)]">
-            <Tabs defaultValue={defaultTab}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid grid-cols-2 w-full h-11">
                 <TabsTrigger value="signin" className="min-h-[40px]">
                   Sign In
@@ -203,7 +218,7 @@ function Auth() {
               {/* ─── Sign In ─── */}
               <TabsContent value="signin" className="space-y-4 mt-6">
                 <div className="space-y-1.5">
-                  <Label htmlFor="si-email">Email</Label>
+                  <Label htmlFor="si-email">Email Address</Label>
                   <Input
                     id="si-email"
                     type="email"
@@ -214,12 +229,13 @@ function Auth() {
                     onKeyDown={handleKeyDown}
                   />
                 </div>
+
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="si-pw">Password</Label>
                     <Link
                       to="/auth/forgot-password"
-                      className="text-xs text-primary hover:underline"
+                      className="text-xs text-primary hover:underline font-medium"
                     >
                       Forgot password?
                     </Link>
@@ -244,7 +260,12 @@ function Auth() {
                     </button>
                   </div>
                 </div>
-                <Button onClick={signIn} disabled={busy} className="w-full min-h-[48px] text-base">
+
+                <Button
+                  onClick={signIn}
+                  disabled={busy}
+                  className="w-full min-h-[48px] text-base font-semibold"
+                >
                   {busy ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in…
@@ -254,73 +275,34 @@ function Auth() {
                   )}
                 </Button>
 
-                <div className="border-t pt-4 space-y-3">
-                  <p className="text-xs text-muted-foreground text-center font-medium">
-                    ⚡ Developer & Demo Quick Access
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 justify-start px-2.5 hover:bg-amber-500/10 hover:border-amber-500/30 dark:hover:bg-amber-500/20"
-                      onClick={() => handleDemoRoleSwitch("super_admin")}
-                    >
-                      <Crown className="h-3.5 w-3.5 mr-1.5 text-amber-500 shrink-0" />
-                      Super Admin
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 justify-start px-2.5 hover:bg-sky-500/10 hover:border-sky-500/30 dark:hover:bg-sky-500/20"
-                      onClick={() => handleDemoRoleSwitch("admin")}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-sky-500 shrink-0" />
-                      Platform Admin
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 justify-start px-2.5 hover:bg-emerald-500/10 hover:border-emerald-500/30 dark:hover:bg-emerald-500/20"
-                      onClick={() => handleDemoRoleSwitch("vendor")}
-                    >
-                      <Store className="h-3.5 w-3.5 mr-1.5 text-emerald-500 shrink-0" />
-                      Vendor Partner
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 justify-start px-2.5 hover:bg-slate-500/10 hover:border-slate-500/30 dark:hover:bg-slate-500/20"
-                      onClick={() => handleDemoRoleSwitch("user")}
-                    >
-                      <User2 className="h-3.5 w-3.5 mr-1.5 text-slate-500 shrink-0" />
-                      Customer
-                    </Button>
-                  </div>
-                  <div className="flex justify-center pt-1">
-                    <Link
-                      to="/setup"
-                      className="text-[10px] text-primary underline hover:opacity-80"
-                    >
-                      Standard DB setup guide (SQL activation)
-                    </Link>
-                  </div>
+                <div className="text-center pt-2">
+                  <span className="text-xs text-muted-foreground">Don't have an account? </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("signup")}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    Create Account
+                  </button>
                 </div>
               </TabsContent>
 
               {/* ─── Sign Up ─── */}
               <TabsContent value="signup" className="space-y-4 mt-6">
                 <div className="space-y-1.5">
-                  <Label htmlFor="su-name">Full name</Label>
+                  <Label htmlFor="su-name">Full Name</Label>
                   <Input
                     id="su-name"
                     autoComplete="name"
-                    placeholder="Muhammad Huzaifa"
+                    placeholder="e.g. Ahmed Khan"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
+
                 <div className="space-y-1.5">
-                  <Label htmlFor="su-email">Email</Label>
+                  <Label htmlFor="su-email">Email Address</Label>
                   <Input
                     id="su-email"
                     type="email"
@@ -328,8 +310,10 @@ function Auth() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="su-pw">Password</Label>
                   <div className="relative">
@@ -337,9 +321,10 @@ function Auth() {
                       id="su-pw"
                       type={showPw ? "text" : "password"}
                       autoComplete="new-password"
-                      placeholder="Min. 6 characters"
+                      placeholder="At least 6 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={handleKeyDown}
                       className="pr-10"
                     />
                     <button
@@ -351,7 +336,12 @@ function Auth() {
                     </button>
                   </div>
                 </div>
-                <Button onClick={signUp} disabled={busy} className="w-full min-h-[48px] text-base">
+
+                <Button
+                  onClick={signUp}
+                  disabled={busy}
+                  className="w-full min-h-[48px] text-base font-semibold"
+                >
                   {busy ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating account…
@@ -360,23 +350,24 @@ function Auth() {
                     "Create Account"
                   )}
                 </Button>
-                <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                  The first registered user automatically becomes <strong>super admin</strong>.
-                </p>
-                <div className="border-t pt-3">
-                  <Button asChild variant="outline" size="sm" className="w-full">
-                    <Link to="/setup">
-                      <Crown className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
-                      Already signed up? Activate super admin
-                    </Link>
-                  </Button>
+
+                <div className="text-center pt-2">
+                  <span className="text-xs text-muted-foreground">Already have an account? </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("signin")}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    Sign In
+                  </button>
                 </div>
               </TabsContent>
             </Tabs>
           </div>
 
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            By signing in you agree to our terms of service and privacy policy.
+          <p className="text-center text-xs text-muted-foreground mt-6 leading-relaxed">
+            By signing in or creating an account, you agree to NexusIoT's Terms of Service and
+            Privacy Policy.
           </p>
         </div>
       </div>

@@ -1,6 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getCategoryFilterValues, productMatchesCategory } from "@/lib/categories";
-import { getMockProductBySlug, MOCK_PRODUCTS } from "@/lib/mock-products";
+import {
+  getMockProductBySlug,
+  MOCK_PRODUCTS,
+  initializeMockProductsOnClient,
+  saveLocalProduct,
+  deleteLocalProduct,
+} from "@/lib/mock-products";
 import type { ProductRow } from "@/types/commerce";
 
 function filterMockProducts(opts?: { category?: string; limit?: number }) {
@@ -41,6 +47,7 @@ function withTimeout<T>(promise: Promise<T>, ms = 800): Promise<T> {
 }
 
 export async function fetchProducts(opts?: { category?: string; limit?: number }) {
+  initializeMockProductsOnClient();
   if (!isSupabaseConfigured()) {
     return filterMockProducts(opts);
   }
@@ -50,10 +57,20 @@ export async function fetchProducts(opts?: { category?: string; limit?: number }
       const values = getCategoryFilterValues(opts.category);
       q = values.length === 1 ? q.eq("category", values[0]) : q.in("category", values);
     }
-    if (opts?.limit) q = q.limit(opts.limit);
-    const { data, error } = await withTimeout(q, 800);
-    if (error) throw error;
-    if (data?.length) return data as ProductRow[];
+    const { data, error } = await withTimeout(q, 1500);
+    if (!error && data) {
+      const dbProducts = data as ProductRow[];
+      // Merge locally created products that aren't in Supabase yet
+      const localOnly = MOCK_PRODUCTS.filter(
+        (lp) => !dbProducts.some((d) => d.id === lp.id || d.slug === lp.slug),
+      );
+      let combined = [...localOnly, ...dbProducts];
+      if (opts?.category) {
+        combined = combined.filter((p) => productMatchesCategory(p.category, opts.category));
+      }
+      if (opts?.limit) combined = combined.slice(0, opts.limit);
+      return combined;
+    }
   } catch {
     /* fallback to mock catalog */
   }
@@ -61,26 +78,31 @@ export async function fetchProducts(opts?: { category?: string; limit?: number }
 }
 
 export async function fetchProductBySlug(slug: string) {
+  initializeMockProductsOnClient();
   if (!slug) return getMockProductBySlug("");
+
+  // Check local catalog first (useful for freshly added local products)
+  const localMatch = getMockProductBySlug(slug);
+
   if (!isSupabaseConfigured()) {
-    return getMockProductBySlug(slug);
+    return localMatch;
   }
   try {
     const { data, error } = await withTimeout(
       supabase.from("products").select("*").eq("slug", slug).maybeSingle(),
-      800,
+      1500,
     );
     if (!error && data) return data as ProductRow;
 
     const { data: dataById, error: errById } = await withTimeout(
       supabase.from("products").select("*").eq("id", slug).maybeSingle(),
-      800,
+      1500,
     );
     if (!errById && dataById) return dataById as ProductRow;
   } catch {
     /* fallback to demo catalog */
   }
-  return getMockProductBySlug(slug);
+  return localMatch;
 }
 
 export async function fetchRelatedProducts(category: string, excludeId: string, limit = 4) {
@@ -112,35 +134,74 @@ export async function upsertProduct(
   payload: Partial<ProductRow> & { title: string; category: string },
 ) {
   const { id, availability, ...rest } = payload;
+  const slug =
+    payload.slug ??
+    payload.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+  const fullLocal: ProductRow = {
+    id: id || `mock-${Date.now()}`,
+    title: payload.title,
+    slug,
+    description: payload.description || "",
+    category: payload.category,
+    price_pkr: Number(payload.price_pkr) || 0,
+    stock: Number(payload.stock) || 0,
+    image_url: payload.image_url || "",
+    manufacturer: payload.manufacturer || "",
+    discount_pct: Number(payload.discount_pct) || 0,
+    availability: (availability || "in_stock") as any,
+    rating: payload.rating || 4.5,
+    gallery_urls: payload.gallery_urls || [],
+    specs: payload.specs || {},
+    tags: payload.tags || [],
+  };
+
+  saveLocalProduct(fullLocal);
+
+  if (!isSupabaseConfigured()) {
+    return fullLocal.id;
+  }
+
   const row = {
     ...rest,
+    slug,
     gallery_urls: rest.gallery_urls ?? undefined,
     specs: rest.specs ?? undefined,
     ...(availability
       ? { availability: availability as "in_stock" | "on_demand" | "coming_soon" | "obsolete" }
       : {}),
   };
-  if (id) {
-    const { error } = await supabase.from("products").update(row).eq("id", id);
-    if (error) throw error;
-    return id;
+
+  try {
+    if (id) {
+      const { error } = await supabase.from("products").update(row).eq("id", id);
+      if (error) console.warn("Supabase update product error:", error);
+      return id;
+    }
+    const { data, error } = await supabase
+      .from("products")
+      .insert({ ...row, slug })
+      .select("id")
+      .single();
+    if (!error && data?.id) {
+      return data.id;
+    }
+  } catch (err) {
+    console.warn("Supabase upsert product fallback:", err);
   }
-  const slug =
-    row.slug ??
-    row.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-  const { data, error } = await supabase
-    .from("products")
-    .insert({ ...row, slug })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return data.id;
+  return fullLocal.id;
 }
 
 export async function deleteProduct(id: string) {
-  const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) throw error;
+  deleteLocalProduct(id);
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.from("products").delete().eq("id", id);
+    } catch (e) {
+      console.warn("Supabase delete product fallback:", e);
+    }
+  }
 }

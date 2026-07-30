@@ -12,6 +12,7 @@ import { slugifyShop } from "@/lib/roles";
 import { toast } from "sonner";
 import { Store } from "lucide-react";
 import { useState } from "react";
+import { ImageOptimizerUploader } from "@/components/ui/ImageOptimizerUploader";
 
 export const Route = createFileRoute("/vendor/settings")({ component: VendorSettings });
 
@@ -20,6 +21,8 @@ function VendorSettings() {
   const qc = useQueryClient();
   const { vendorId } = Route.useRouteContext();
   const [active, setActive] = useState(true);
+  const [shopLogo, setShopLogo] = useState<string>("");
+  const [shopBanner, setShopBanner] = useState<string>("");
 
   const { data: vendor, refetch } = useQuery({
     queryKey: ["vendor-profile", user?.id],
@@ -31,7 +34,11 @@ function VendorSettings() {
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
-      if (data) setActive(data.is_active);
+      if (data) {
+        setActive(data.is_active);
+        if (data.logo_url) setShopLogo(data.logo_url);
+        if (data.banner_url) setShopBanner(data.banner_url);
+      }
       return data;
     },
   });
@@ -82,6 +89,25 @@ function VendorSettings() {
 
       <SectionCard>
         <form onSubmit={save} className="grid sm:grid-cols-2 gap-4 max-w-2xl">
+          <div className="sm:col-span-2 space-y-4">
+            <ImageOptimizerUploader
+              value={shopLogo}
+              onChange={setShopLogo}
+              label="Store Logo (Next-Gen Upload)"
+              description="Upload vendor store logo. Automatically converted to compressed WebP."
+              maxWidth={600}
+              maxHeight={600}
+            />
+            <ImageOptimizerUploader
+              value={shopBanner}
+              onChange={setShopBanner}
+              label="Storefront Cover Banner"
+              description="Upload high-res store cover banner. Optimized for fast lazy-loading."
+              maxWidth={1920}
+              maxHeight={800}
+            />
+          </div>
+
           <div className="sm:col-span-2">
             <Label>Shop name</Label>
             <Input

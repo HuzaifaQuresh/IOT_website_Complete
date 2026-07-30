@@ -4,6 +4,7 @@ import {
   Cpu,
   Search,
   ShoppingCart,
+  Heart,
   LogOut,
   LayoutDashboard,
   Menu,
@@ -14,6 +15,7 @@ import {
   Package,
 } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +38,7 @@ import { TrackOrderDialog } from "@/components/site/TrackOrderDialog";
 
 export function Header() {
   const { count, setDrawerOpen } = useCart();
+  const { count: wishlistCount, setDrawerOpen: setWishlistOpen } = useWishlist();
   const { user, roles, isAdmin, isSuperAdmin, isVendor, signOut } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -94,7 +97,12 @@ export function Header() {
             </button>
           </div>
           <div className="flex gap-4 items-center">
-            <span className="font-medium text-slate-600">📞 Support: 0332-3059259</span>
+            <a
+              href="mailto:sales@nexusiot.pk"
+              className="font-medium text-slate-600 hover:text-primary transition-colors"
+            >
+              sales@nexusiot.pk
+            </a>
           </div>
         </div>
       </div>
@@ -253,6 +261,22 @@ export function Header() {
             </Link>
           </nav>
 
+          {/* Wishlist button */}
+          <button
+            type="button"
+            onClick={() => setWishlistOpen(true)}
+            className="relative hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 min-h-[44px] hover:bg-slate-100 transition text-slate-700"
+            aria-label={`Wishlist, ${wishlistCount} items`}
+          >
+            <Heart className={cn("h-5 w-5", wishlistCount > 0 && "text-rose-500 fill-rose-500")} />
+            <span className="hidden lg:inline text-sm">Wishlist</span>
+            {wishlistCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 text-white text-[10px] font-bold px-1">
+                {wishlistCount}
+              </span>
+            )}
+          </button>
+
           {/* Cart button */}
           <button
             type="button"
@@ -263,7 +287,7 @@ export function Header() {
             <ShoppingCart className="h-5 w-5" />
             <span className="hidden lg:inline text-sm">Cart</span>
             {count > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-primary text-[10px] font-bold px-1">
+              <span className="absolute -top-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-primary text-white text-[10px] font-bold px-1">
                 {count}
               </span>
             )}
@@ -307,6 +331,10 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate({ to: "/account/orders" })}>
                   <Package className="h-4 w-4 mr-2 shrink-0" /> My Orders
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setWishlistOpen(true)}>
+                  <Heart className="h-4 w-4 mr-2 shrink-0 text-rose-500 fill-rose-500" /> Saved
+                  Wishlist ({wishlistCount})
                 </DropdownMenuItem>
 
                 {isVendor && (

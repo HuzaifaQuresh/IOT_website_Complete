@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -25,13 +25,25 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { saveLocalProduct } from "@/lib/mock-products";
 
+import {
+  ImageOptimizerUploader,
+  MultiImageOptimizerUploader,
+} from "@/components/ui/ImageOptimizerUploader";
+
+import {
+  TechnicalSpecsEditor,
+  TechSpecItem,
+  TechnicalSpecsData,
+} from "@/components/product/TechnicalSpecsEditor";
+
 const productSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
   price_pkr: z.coerce.number().min(1, "Price must be greater than 0"),
   stock: z.coerce.number().min(0, "Stock cannot be negative"),
-  image_url: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  image_url: z.string().optional().or(z.literal("")),
+  gallery_urls: z.array(z.string()).optional(),
   manufacturer: z.string().optional(),
   color: z.string().optional(),
   availability: z.enum(["in_stock", "on_demand", "coming_soon", "obsolete"]),
@@ -53,6 +65,17 @@ export function ProductEditor({
 }) {
   const qc = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [techSpecs, setTechSpecs] = useState<TechnicalSpecsData>({
+    protocol: "Zigbee 3.0",
+    power: "12V DC / Battery",
+    ecosystem: "Tuya Smart / Smart Life",
+    tags: "zigbee, smart-home",
+    customSpecs: [
+      { key: "Working Temperature", value: "-10°C to 55°C" },
+      { key: "Operating Voltage", value: "12V DC / 3V Battery" },
+      { key: "Warranty", value: "12 months manufacturer" },
+    ],
+  });
 
   const form = useForm<ProductValues>({
     resolver: zodResolver(productSchema),
@@ -63,6 +86,7 @@ export function ProductEditor({
       price_pkr: product?.price_pkr || 0,
       stock: product?.stock || 0,
       image_url: product?.image_url || "",
+      gallery_urls: product?.gallery_urls || [],
       manufacturer: product?.manufacturer || "",
       color: product?.color || "",
       availability: product?.availability || "in_stock",
@@ -71,10 +95,56 @@ export function ProductEditor({
   });
 
   // reset form when product changes
-  useState(() => {
+  useEffect(() => {
     if (product) {
-      form.reset(product);
+      const specs = (
+        product.specs && typeof product.specs === "object" ? product.specs : {}
+      ) as Record<string, string>;
+      const tags = Array.isArray(product.tags) ? product.tags : [];
+      const protocol =
+        specs.protocol ||
+        tags.find((t) => /zigbee|wifi|matter|bluetooth|lora|z-wave/i.test(t)) ||
+        "";
+      const power = specs.power || "";
+      const ecosystem = specs.ecosystem || "";
+
+      const customSpecs = Object.entries(specs)
+        .filter(([k]) => k !== "protocol" && k !== "power" && k !== "ecosystem")
+        .map(([key, value]) => ({ key, value: String(value) }));
+
+      setTechSpecs({
+        protocol,
+        power,
+        ecosystem,
+        tags: tags.join(", "),
+        customSpecs,
+      });
+
+      form.reset({
+        title: product.title || "",
+        description: product.description || "",
+        category: product.category || "",
+        price_pkr: product.price_pkr ?? 0,
+        stock: product.stock ?? 0,
+        image_url: product.image_url || "",
+        gallery_urls: product.gallery_urls || [],
+        manufacturer: product.manufacturer || "",
+        color: product.color || "",
+        availability: product.availability || "in_stock",
+        discount_pct: product.discount_pct ?? 0,
+      });
     } else {
+      setTechSpecs({
+        protocol: "Zigbee 3.0",
+        power: "12V DC / Battery",
+        ecosystem: "Tuya Smart / Smart Life",
+        tags: "zigbee, smart-home",
+        customSpecs: [
+          { key: "Working Temperature", value: "-10°C to 55°C" },
+          { key: "Operating Voltage", value: "12V DC / 3V Battery" },
+          { key: "Warranty", value: "12 months manufacturer" },
+        ],
+      });
       form.reset({
         title: "",
         description: "",
@@ -82,6 +152,7 @@ export function ProductEditor({
         price_pkr: 0,
         stock: 0,
         image_url: "",
+        gallery_urls: [],
         manufacturer: "",
         color: "",
         availability: "in_stock",
@@ -100,9 +171,29 @@ export function ProductEditor({
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)+/g, "");
 
+      const specsObj: Record<string, string> = {};
+      if (techSpecs.protocol.trim()) specsObj.protocol = techSpecs.protocol.trim();
+      if (techSpecs.power.trim()) specsObj.power = techSpecs.power.trim();
+      if (techSpecs.ecosystem.trim()) specsObj.ecosystem = techSpecs.ecosystem.trim();
+      (techSpecs.customSpecs || []).forEach((item) => {
+        if (item.key.trim() && item.value.trim()) {
+          specsObj[item.key.trim()] = item.value.trim();
+        }
+      });
+
+      const tagsArr = techSpecs.tags
+        ? techSpecs.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+
       const payload = {
         ...values,
+        gallery_urls: values.gallery_urls || [],
         vendor_id: vendorId,
+        specs: specsObj,
+        tags: tagsArr,
       };
 
       if (product?.id) {
@@ -123,6 +214,7 @@ export function ProductEditor({
             price_pkr: Number(payload.price_pkr) || 0,
             stock: Number(payload.stock) || 0,
             discount_pct: Number(payload.discount_pct) || 0,
+            gallery_urls: payload.gallery_urls,
           };
           saveLocalProduct(localProduct as any);
           toast.success("Product updated successfully (Local Storage)");
@@ -148,13 +240,13 @@ export function ProductEditor({
             price_pkr: Number(payload.price_pkr) || 0,
             stock: Number(payload.stock) || 0,
             image_url: payload.image_url || "",
+            gallery_urls: payload.gallery_urls || [],
             manufacturer: payload.manufacturer || "",
             discount_pct: Number(payload.discount_pct) || 0,
             availability: payload.availability || "in_stock",
             rating: 4.5,
             color: payload.color || "",
             vendor_id: vendorId || "demo-vendor",
-            gallery_urls: [],
             specs: {},
           };
           saveLocalProduct(localProduct as any);
@@ -174,13 +266,13 @@ export function ProductEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{product ? "Edit Product" : "Add Product"}</DialogTitle>
           <DialogDescription>
             {product
-              ? "Update your product details below."
-              : "Fill in the details to list a new product in your store."}
+              ? "Update your product details and multiple gallery images below."
+              : "Fill in details and upload multiple images to list a new product."}
           </DialogDescription>
         </DialogHeader>
 
@@ -199,7 +291,7 @@ export function ProductEditor({
               <Textarea {...form.register("description")} placeholder="Describe the product..." />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 col-span-2 sm:col-span-1">
               <Label>Category</Label>
               <Input {...form.register("category")} placeholder="e.g. Smart Home" />
               {form.formState.errors.category && (
@@ -207,9 +299,19 @@ export function ProductEditor({
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Image URL (Optional)</Label>
-              <Input {...form.register("image_url")} placeholder="https://..." />
+            <div className="col-span-2 space-y-2">
+              <MultiImageOptimizerUploader
+                primaryImage={form.watch("image_url") || ""}
+                onPrimaryImageChange={(url) =>
+                  form.setValue("image_url", url, { shouldValidate: true })
+                }
+                galleryImages={form.watch("gallery_urls") || []}
+                onGalleryImagesChange={(urls) =>
+                  form.setValue("gallery_urls", urls, { shouldValidate: true })
+                }
+                label="Product Images & Multi-Angle Gallery"
+                description="Upload multiple images for this product. Automatically converts files to WebP."
+              />
               {form.formState.errors.image_url && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.image_url.message}
@@ -266,6 +368,10 @@ export function ProductEditor({
             <div className="space-y-2">
               <Label>Discount % (Optional)</Label>
               <Input type="number" {...form.register("discount_pct")} />
+            </div>
+
+            <div className="col-span-2">
+              <TechnicalSpecsEditor value={techSpecs} onChange={setTechSpecs} />
             </div>
           </div>
 

@@ -13,12 +13,29 @@ import { PageContainer, Breadcrumbs } from "@/components/site/PageLayout";
 import { buildProductGalleryImages } from "@/lib/product-image";
 
 export const Route = createFileRoute("/products/$slug")({
-  loader: ({ context: { queryClient }, params: { slug } }) =>
-    queryClient.ensureQueryData({
-      queryKey: ["product", slug],
-      queryFn: () => fetchProductBySlug(slug),
-    }),
+  loader: async ({ context: { queryClient }, params: { slug } }) => {
+    try {
+      if (!slug) return null;
+      return await queryClient.ensureQueryData({
+        queryKey: ["product", slug],
+        queryFn: () => fetchProductBySlug(slug),
+      });
+    } catch {
+      return null;
+    }
+  },
   component: ProductDetailPage,
+  errorComponent: () => (
+    <PageContainer size="md" className="py-20 text-center">
+      <h1 className="text-2xl font-bold text-slate-900">Unable to load product</h1>
+      <p className="text-slate-500 text-sm mt-2">
+        The requested product could not be loaded. Please try again or explore the catalog.
+      </p>
+      <Button asChild className="mt-6 font-bold">
+        <Link to="/products">Explore All Products</Link>
+      </Button>
+    </PageContainer>
+  ),
   notFoundComponent: () => (
     <PageContainer size="md" className="py-20 text-center">
       <h1 className="text-2xl font-bold">Product not found</h1>
@@ -30,8 +47,10 @@ export const Route = createFileRoute("/products/$slug")({
 });
 
 function ProductDetailPage() {
-  const { slug } = Route.useParams();
-  const { product, reviews, related } = useProduct(slug);
+  const params = Route.useParams();
+  const loaderData = Route.useLoaderData();
+  const slug = params?.slug || "";
+  const { product, reviews, related } = useProduct(slug, loaderData);
 
   const { data: vouchers } = useQuery({
     queryKey: ["vouchers-public"],
@@ -39,7 +58,9 @@ function ProductDetailPage() {
     staleTime: 120_000,
   });
 
-  if (product.isLoading) {
+  const productData = product.data ?? loaderData;
+
+  if (!productData && (product.isLoading || product.isPending)) {
     return (
       <PageContainer>
         <div className="h-80 sm:h-96 animate-pulse bg-muted/50 rounded-xl" />
@@ -47,7 +68,7 @@ function ProductDetailPage() {
     );
   }
 
-  if (!product.isLoading && !product.data) {
+  if (!productData) {
     return (
       <PageContainer size="md" className="py-20 text-center">
         <h1 className="text-2xl font-bold text-slate-900">Product not found</h1>
@@ -61,7 +82,7 @@ function ProductDetailPage() {
     );
   }
 
-  const data = product.data!;
+  const data = productData;
   const gallery = buildProductGalleryImages(data.image_url, data.gallery_urls);
 
   const promoVoucher = vouchers?.[0] ?? null;
@@ -71,14 +92,18 @@ function ProductDetailPage() {
       <Breadcrumbs
         items={[
           { label: "Home", to: "/" },
-          { label: data.category, to: "/products", search: { category: data.category } },
-          { label: data.title },
+          {
+            label: data.category || "Components",
+            to: "/products",
+            search: { category: data.category || undefined },
+          },
+          { label: data.title || "Product Details" },
         ]}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 lg:items-start">
         <div className="min-w-0 w-full lg:sticky lg:top-24 self-start">
-          <ProductGallery title={data.title} images={gallery} />
+          <ProductGallery title={data.title || "Product"} images={gallery} />
         </div>
         <div className="min-w-0">
           <ProductPurchasePanel product={data} activeVoucher={promoVoucher} />
@@ -94,8 +119,8 @@ function ProductDetailPage() {
       />
 
       <RelatedProducts
-        category={data.category}
-        excludeId={data.id}
+        category={data.category || "Components"}
+        excludeId={data.id || ""}
         products={related.data}
         loading={related.isLoading}
       />

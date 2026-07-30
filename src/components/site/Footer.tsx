@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Cpu, Mail, Phone, MapPin, Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
+import { Cpu, Mail, MapPin, Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 
 const COMPANY_LINKS = [
   { to: "/iot-solutions", label: "Enterprise Solutions" },
@@ -32,12 +32,6 @@ export function Footer() {
               <Mail className="h-4 w-4 text-primary shrink-0" />
               <a href="mailto:sales@nexusiot.pk" className="hover:text-primary transition-colors">
                 sales@nexusiot.pk
-              </a>
-            </li>
-            <li className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-primary shrink-0" />
-              <a href="tel:+923323059259" className="hover:text-primary transition-colors">
-                +92 332 3059259
               </a>
             </li>
             <li className="flex items-start gap-2">

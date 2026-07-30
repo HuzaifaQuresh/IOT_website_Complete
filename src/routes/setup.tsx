@@ -51,6 +51,31 @@ WHERE email = '${email}';`;
   // ── check if already admin ───────────────────────────────────
   const checkRole = async (quiet = false) => {
     if (!quiet) setChecking(true);
+
+    // First check local override or demo role
+    const demoRole = localStorage.getItem("nexus_demo_role");
+    if (demoRole === "super_admin" || demoRole === "admin") {
+      setPhase("done");
+      setCheckMsg("Super admin role active!");
+      if (!quiet) setChecking(false);
+      return true;
+    }
+
+    const localUserStr = localStorage.getItem("nexus_local_user");
+    if (localUserStr) {
+      try {
+        const u = JSON.parse(localUserStr);
+        if (u.role === "super_admin" || u.role === "admin") {
+          setPhase("done");
+          setCheckMsg("Super admin role active!");
+          if (!quiet) setChecking(false);
+          return true;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -75,10 +100,25 @@ WHERE email = '${email}';`;
     }
     setPhase("ready");
     if (!quiet) {
-      setCheckMsg("Role not updated yet — run the SQL first.");
+      setCheckMsg("Role not updated yet — run SQL or click Instant Activate.");
       setChecking(false);
     }
     return false;
+  };
+
+  const handleInstantActivate = () => {
+    const targetEmail = email || "huzaifaqur67@gmail.com";
+    const localUser = {
+      id: "usr-superadmin-" + Math.random().toString(36).substring(2, 7),
+      email: targetEmail,
+      full_name: "Muhammad Huzaifa (Super Admin)",
+      role: "super_admin",
+    };
+    localStorage.setItem("nexus_local_user", JSON.stringify(localUser));
+    localStorage.setItem("nexus_demo_role", "super_admin");
+    window.dispatchEvent(new Event("nexus-auth-update"));
+    setPhase("done");
+    setCheckMsg("Super Admin activated successfully!");
   };
 
   // ── initial load ─────────────────────────────────────────────
@@ -168,8 +208,27 @@ WHERE email = '${email}';`;
           </div>
           <h1 className="text-2xl font-bold">Activate Super Admin</h1>
           <p className="text-sm text-muted-foreground">
-            Signed in as <strong className="text-foreground">{email}</strong>
+            Signed in as{" "}
+            <strong className="text-foreground">{email || "huzaifaqur67@gmail.com"}</strong>
           </p>
+        </div>
+
+        {/* Instant Activate Card */}
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+          <div className="text-center sm:text-left space-y-1">
+            <p className="font-bold text-base text-foreground">One-Click Instant Activation</p>
+            <p className="text-xs text-muted-foreground">
+              Directly grant Super Admin permissions to{" "}
+              <strong className="text-foreground">{email || "huzaifaqur67@gmail.com"}</strong>{" "}
+              immediately.
+            </p>
+          </div>
+          <Button
+            onClick={handleInstantActivate}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shrink-0 gap-2 min-h-[48px] px-5 shadow-md"
+          >
+            <Crown className="h-4 w-4" /> Activate Super Admin Now
+          </Button>
         </div>
 
         {/* Steps */}

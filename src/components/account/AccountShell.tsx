@@ -1,12 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
-import { User2, Package, LayoutDashboard, Store, ShoppingBag } from "lucide-react";
+import { User2, Package, LayoutDashboard, Store, ShoppingBag, LogIn, Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { RoleBadge } from "@/components/dashboard/RoleBadge";
 import { QuickActionCard } from "@/components/dashboard/QuickActionCard";
 import { primaryRole, ROLE_CATALOG } from "@/lib/roles";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { AppRole } from "@/types/commerce";
 
 const BASE_NAV: { to: string; label: string; icon: LucideIcon; exact?: boolean }[] = [
   { to: "/account", label: "Profile", icon: User2, exact: true },
@@ -18,6 +18,34 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
   const { user, roles, isAdmin, isSuperAdmin, isVendor } = useAuth();
   const primary = primaryRole(roles);
   const meta = ROLE_CATALOG[primary];
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-6xl w-full px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 rounded-xl border bg-card p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary text-xl font-bold shrink-0">
+              <Search className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Order Tracking & History</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Viewing order details as guest. Sign in or register to sync orders across your
+                devices.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" className="gap-2 shrink-0">
+            <Link to="/auth">
+              <LogIn className="h-4 w-4" />
+              Sign In / Register
+            </Link>
+          </Button>
+        </div>
+        <div className="min-w-0">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl w-full px-4 sm:px-6 py-6 sm:py-8">

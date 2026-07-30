@@ -10,13 +10,17 @@ import type { ProductReview } from "@/types/commerce";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+function initials(name?: string) {
+  if (!name || typeof name !== "string") return "U";
+  return (
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "U"
+  );
 }
 
 function formatDate(iso: string) {

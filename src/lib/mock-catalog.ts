@@ -25,7 +25,13 @@ const STATIC_MOCK_PRODUCTS: ProductRow[] = [
       "https://images.unsplash.com/photo-1581092335397-9583eb92d232?w=600",
       "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=600",
     ],
-    specs: { power: "3V (2× AAA)" },
+    specs: {
+      protocol: "Zigbee 3.0",
+      power: "3V (2× AAA)",
+      ecosystem: "Tuya Smart / Smart Life",
+      "Working Temperature": "-10°C to 55°C",
+      "Detection Range": "Up to 8 meters",
+    },
   },
   {
     id: "mock-2",
@@ -46,7 +52,13 @@ const STATIC_MOCK_PRODUCTS: ProductRow[] = [
       "https://images.unsplash.com/photo-1558002038-1055907df827?w=600",
       "https://images.unsplash.com/photo-1551808525-51a94da548ce?w=600",
     ],
-    specs: { power: "12V DC" },
+    specs: {
+      protocol: "Wi-Fi 2.4GHz",
+      power: "12V DC / 1A Adapter",
+      ecosystem: "Tuya Smart / Smart Life",
+      Resolution: "2560 x 1440 (4MP)",
+      "Night Vision": "IR Cut Up to 15m",
+    },
   },
   {
     id: "mock-3",
@@ -67,7 +79,13 @@ const STATIC_MOCK_PRODUCTS: ProductRow[] = [
       "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600",
       "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=600",
     ],
-    specs: { power: "5V 5A USB-C" },
+    specs: {
+      protocol: "Wi-Fi 5 & Bluetooth 5.0",
+      power: "5V 5A USB-C PD",
+      ecosystem: "Raspberry Pi OS / Linux",
+      Processor: "Broadcom BCM2712 2.4GHz Quad-Core",
+      RAM: "8GB LPDDR4X",
+    },
   },
   {
     id: "mock-4",
@@ -85,7 +103,13 @@ const STATIC_MOCK_PRODUCTS: ProductRow[] = [
     tags: ["esp32"],
     rating: 4.8,
     gallery_urls: [],
-    specs: {},
+    specs: {
+      protocol: "Wi-Fi 802.11 b/g/n & BLE 4.2",
+      power: "5V Micro-USB / 3.3V Pin",
+      ecosystem: "Arduino / ESP-IDF / Home Assistant",
+      Chipset: "ESP32 Dual Core 240MHz",
+      Flash: "4MB SPI Flash",
+    },
   },
   {
     id: "mock-5",
@@ -103,7 +127,12 @@ const STATIC_MOCK_PRODUCTS: ProductRow[] = [
     tags: ["relay"],
     rating: 4.5,
     gallery_urls: [],
-    specs: {},
+    specs: {
+      protocol: "GPIO Signal Trigger",
+      power: "5V DC / 12V DC Input",
+      ecosystem: "Universal / PLC / MCU",
+      "Max Load": "250V AC 10A / 30V DC 10A",
+    },
   },
   {
     id: "mock-6",
@@ -240,8 +269,9 @@ export const MOCK_PRODUCTS: ProductRow[] = [...STATIC_MOCK_PRODUCTS];
 const isBrowser = typeof window !== "undefined";
 
 let isLoadedFromLocalStorage = false;
-export function initializeMockProductsOnClient() {
-  if (!isBrowser || isLoadedFromLocalStorage) return;
+export function initializeMockProductsOnClient(force = false) {
+  if (!isBrowser) return;
+  if (isLoadedFromLocalStorage && !force) return;
   try {
     const val = localStorage.getItem("nexus_local_products");
     if (val) {
@@ -250,65 +280,94 @@ export function initializeMockProductsOnClient() {
         MOCK_PRODUCTS.length = 0;
         MOCK_PRODUCTS.push(...parsed);
       }
+    } else {
+      // Initialize with default static products in local storage
+      localStorage.setItem("nexus_local_products", JSON.stringify(STATIC_MOCK_PRODUCTS));
     }
     isLoadedFromLocalStorage = true;
   } catch (e) {
-    console.error(e);
+    console.error("Failed to load local products:", e);
   }
 }
 
 export function saveLocalProduct(product: ProductRow) {
-  const index = MOCK_PRODUCTS.findIndex((p) => p.id === product.id);
+  initializeMockProductsOnClient();
+  const targetId = product.id || `mock-${Date.now()}`;
+  const normalizedProduct = { ...product, id: targetId };
+
+  const index = MOCK_PRODUCTS.findIndex(
+    (p) => p.id === targetId || (product.slug && p.slug === product.slug),
+  );
   if (index >= 0) {
-    MOCK_PRODUCTS[index] = product;
+    MOCK_PRODUCTS[index] = normalizedProduct;
   } else {
-    MOCK_PRODUCTS.unshift(product);
+    MOCK_PRODUCTS.unshift(normalizedProduct);
   }
   if (isBrowser) {
     try {
       localStorage.setItem("nexus_local_products", JSON.stringify(MOCK_PRODUCTS));
     } catch (e) {
-      console.error(e);
+      console.error("Failed to save local product:", e);
     }
   }
+  return normalizedProduct;
 }
 
 export function deleteLocalProduct(id: string) {
-  const index = MOCK_PRODUCTS.findIndex((p) => p.id === id);
+  initializeMockProductsOnClient();
+  const index = MOCK_PRODUCTS.findIndex((p) => p.id === id || p.slug === id);
   if (index >= 0) {
     MOCK_PRODUCTS.splice(index, 1);
     if (isBrowser) {
       try {
         localStorage.setItem("nexus_local_products", JSON.stringify(MOCK_PRODUCTS));
       } catch (e) {
-        console.error(e);
+        console.error("Failed to delete local product:", e);
       }
     }
   }
 }
 
 export function getMockProductBySlug(slug: string) {
-  if (!slug) return MOCK_PRODUCTS[0] ?? null;
-  const decoded = decodeURIComponent(slug).toLowerCase().trim();
+  initializeMockProductsOnClient();
+  if (!MOCK_PRODUCTS.length) return null;
+  if (!slug) return MOCK_PRODUCTS[0];
 
-  let match = MOCK_PRODUCTS.find(
-    (p) =>
-      p.slug.toLowerCase() === decoded ||
-      p.id.toLowerCase() === decoded ||
-      p.slug === slug ||
-      p.id === slug,
-  );
-
-  if (!match) {
-    match = MOCK_PRODUCTS.find(
-      (p) =>
-        p.slug.toLowerCase().includes(decoded) ||
-        decoded.includes(p.slug.toLowerCase()) ||
-        p.title.toLowerCase().includes(decoded),
-    );
+  let decoded = slug;
+  try {
+    decoded = decodeURIComponent(slug).toLowerCase().trim();
+  } catch {
+    decoded = slug.toLowerCase().trim();
   }
 
-  return match ?? MOCK_PRODUCTS[0] ?? null;
+  const cleanSlug = decoded.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  let match = MOCK_PRODUCTS.find((p) => {
+    const pSlug = (p.slug || "").toLowerCase();
+    const pId = (p.id || "").toLowerCase();
+    return (
+      pSlug === decoded ||
+      pId === decoded ||
+      pSlug === cleanSlug ||
+      p.slug === slug ||
+      p.id === slug
+    );
+  });
+
+  if (!match) {
+    match = MOCK_PRODUCTS.find((p) => {
+      const pSlug = (p.slug || "").toLowerCase();
+      const pTitle = (p.title || "").toLowerCase();
+      const pId = (p.id || "").toLowerCase();
+      return (
+        (pSlug && (pSlug.includes(decoded) || decoded.includes(pSlug))) ||
+        (pTitle && (pTitle.includes(decoded) || decoded.includes(pTitle))) ||
+        (pId && (pId.includes(decoded) || decoded.includes(pId)))
+      );
+    });
+  }
+
+  return match ?? MOCK_PRODUCTS[0];
 }
 
 export const MOCK_PRODUCT_COUNT = MOCK_PRODUCTS.length;

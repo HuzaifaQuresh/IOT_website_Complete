@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchProductBySlug, fetchRelatedProducts } from "@/api/products";
 import { fetchProductReviews } from "@/api/reviews";
+import type { ProductRow } from "@/types/commerce";
 
-export function useProduct(slug: string) {
+export function useProduct(slug: string, initialData?: ProductRow | null) {
   const product = useQuery({
     queryKey: ["product", slug],
     queryFn: () => fetchProductBySlug(slug),
     enabled: !!slug,
+    initialData: initialData ?? undefined,
   });
 
   const productId = product.data?.id;

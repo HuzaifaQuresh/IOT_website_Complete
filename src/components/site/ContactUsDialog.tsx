@@ -90,13 +90,13 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <Phone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <Clock className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div>
                     <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Phone Support
+                      Support Availability
                     </h4>
-                    <p className="text-sm text-slate-400 mt-1">0332-3059259</p>
-                    <p className="text-xs text-slate-500">Mon - Sat, 9:00 AM - 6:00 PM</p>
+                    <p className="text-sm text-slate-400 mt-1">Mon - Sat, 9:00 AM - 6:00 PM PKT</p>
+                    <p className="text-xs text-slate-500">24/7 Email & Online Helpdesk</p>
                   </div>
                 </div>
 
